@@ -1,6 +1,7 @@
 # MicroCVM
 
-**MicroCVM** is a lightweight virtual machine written in C, featuring its own virtual CPU, memory and instruction set.
+**MicroCVM** is a lightweight virtual machine written in Rust, featuring its own virtual CPU, memory and instruction set.
+The original project was written in C, hence the name **MicroCVM**.
 
 # Building
 
