@@ -2,10 +2,12 @@ use std::fmt::{self, Display};
 use std::fs::File;
 use std::io::{self, Read};
 
-const MEMORY_SIZE: usize = 32 * 1024;
+const FREE_MEMORY: usize = 24 * 1024;
+const VIDEO_MEMORY: usize = 24 * 1024;
 
 pub struct MicroCVMCpu {
     pub memory: Vec<u8>,
+    pub video_memory: Vec<u8>,
     pub registers: Vec<u8>,
     pub sp: u8,
     pub pc: u8,
@@ -13,6 +15,7 @@ pub struct MicroCVMCpu {
 }
 
 #[repr(u8)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpcodeType {
     Load = 0x01,
     Store = 0x02,
@@ -87,14 +90,15 @@ pub union OpcodeArg2 {
 impl MicroCVMCpu {
     pub fn empty() -> Self {
         Self {
-            memory: vec![0; MEMORY_SIZE],
+            memory: vec![0; FREE_MEMORY],
+            video_memory: vec![0; VIDEO_MEMORY],
             registers: vec![0; 8],
             sp: 0,
             pc: 0,
             flags: 0,
         }
     }
-    pub fn get_opcode_argument_count(opcode_type: &OpcodeType) -> u8 {
+    pub fn get_opcode_argument_count(opcode_type: OpcodeType) -> u8 {
         match opcode_type {
             OpcodeType::Inc => 1,
             OpcodeType::Mov => 2,
@@ -114,7 +118,7 @@ impl MicroCVMCpu {
             OpcodeType::try_from(opcode_byte).unwrap_or(OpcodeType::Nop);
 
         current_instruction.argument_count =
-            Self::get_opcode_argument_count(&current_instruction.opcode_type);
+            Self::get_opcode_argument_count(current_instruction.opcode_type);
 
         if current_instruction.argument_count >= 1 {
             let arg1: u8 = self.memory[(self.pc + 1) as usize];

@@ -1,7 +1,7 @@
-const DISK_SIZE: usize = 32 * 1024;
+const DISK_SIZE: usize = 48 * 1024;
 
 pub struct MicroCVMDisk {
-    pub data: Vec2<u8>,
+    pub data: Vec<u8>,
     pub filepath: String,
 }
 

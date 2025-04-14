@@ -1,5 +1,8 @@
 mod cpu;
 mod disk;
+mod render;
+
+use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
     let mut vcpu = cpu::MicroCVMCpu::empty();
@@ -19,6 +22,13 @@ fn main() {
 
         vcpu.pc += 1;
     }
+
+    let event_loop = EventLoop::new().unwrap();
+
+    event_loop.set_control_flow(ControlFlow::Poll);
+
+    let mut app = render::App::default();
+    event_loop.run_app(&mut app);
 
     println!("{}", vcpu.registers[cpu::Register::R0 as usize]);
 }
