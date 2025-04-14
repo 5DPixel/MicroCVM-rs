@@ -1,7 +1,9 @@
 mod cpu;
+mod disk;
 
 fn main() {
     let mut vcpu = cpu::MicroCVMCpu::empty();
+    let mut vdisk = disk::MicroCVMDisk::empty();
 
     vcpu.memory[0] = cpu::OpcodeType::Mov as u8;
     vcpu.memory[1] = cpu::Register::R0 as u8;
