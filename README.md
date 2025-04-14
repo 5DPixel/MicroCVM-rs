@@ -9,7 +9,4 @@ The original project was written in C, hence the name **MicroCVM**.
 Alternatively, you may compile the source code manually.
 
 ## To build MicroCVM, it is required to have the following tools:
-- CMake
-- Ninja
-- C99-Compatible Compiler (e.g., GCC, clang)
-- Windows 10 or above
+- Cargo
