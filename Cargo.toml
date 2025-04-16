@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 pixels = "0.15.0"
-winit = "0.30.9"
+winit = { version = "0.30.9", features = ["rwh_05"] }

@@ -27,8 +27,8 @@ fn main() {
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = render::App::default();
-    event_loop.run_app(&mut app);
+    let mut app = render::App::new(768, 576, vcpu.video_memory);
+    let _ = event_loop.run_app(&mut app);
 
     println!("{}", vcpu.registers[cpu::Register::R0 as usize]);
 }

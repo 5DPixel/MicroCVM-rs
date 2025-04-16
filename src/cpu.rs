@@ -1,9 +1,7 @@
-use std::fmt::{self, Display};
-use std::fs::File;
-use std::io::{self, Read};
+use std::fmt::Display;
 
-const FREE_MEMORY: usize = 24 * 1024;
-const VIDEO_MEMORY: usize = 24 * 1024;
+const FREE_MEMORY: usize = 2048 * 1024;
+const VIDEO_MEMORY: usize = 1728 * 1024;
 
 pub struct MicroCVMCpu {
     pub memory: Vec<u8>,
