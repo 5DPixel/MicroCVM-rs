@@ -13,7 +13,7 @@ pub struct App {
     pixels: Option<Pixels<'static>>,
     width: u32,
     height: u32,
-    video_memory: Vec<u8>,
+    video_memory: Vec<super::types::Color>,
 }
 
 impl ApplicationHandler for App {
@@ -44,7 +44,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.render(self.video_memory.clone());
+                self.render(self.video_memory.clone()); //Fix: Could cause memory leak
                 self.window.as_ref().unwrap().request_redraw();
             }
             _ => (),
@@ -53,24 +53,36 @@ impl ApplicationHandler for App {
 }
 
 impl App {
-    fn render(&mut self, video_memory: Vec<u8>) {
+    fn render(&mut self, video_memory: Vec<super::types::Color>) {
         if let Some(pixels) = self.pixels.as_mut() {
             let frame = pixels.frame_mut();
 
             if video_memory.len() < frame.len() {
                 eprintln!(
-                    "Error: Video memory size does not match framebuffer size. Frame size: {}",
-                    frame.len()
+                    "Error: Video memory size does not match framebuffer size. Frame size: {}, Video memory size: {}",
+                    frame.len(),
+                    video_memory.len()
                 );
                 return;
             }
 
-            frame.copy_from_slice(&video_memory);
+            let mut byte_index = 0;
+            for color in video_memory {
+                if !(byte_index + 3 < frame.len()) {
+                    break;
+                }
+                frame[byte_index] = color.r;
+                frame[byte_index + 1] = color.g;
+                frame[byte_index + 2] = color.b;
+                frame[byte_index + 3] = color.a;
+                byte_index += 4;
+            }
+
             pixels.render().unwrap();
         }
     }
 
-    pub fn new(width: u32, height: u32, video_memory: Vec<u8>) -> Self {
+    pub fn new(width: u32, height: u32, video_memory: Vec<super::types::Color>) -> Self {
         App {
             window: None,
             pixels: None,

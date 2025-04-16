@@ -1,11 +1,13 @@
 use std::fmt::Display;
 
+use crate::types::Color;
+
 const FREE_MEMORY: usize = 2048 * 1024;
 const VIDEO_MEMORY: usize = 1728 * 1024;
 
 pub struct MicroCVMCpu {
     pub memory: Vec<u8>,
-    pub video_memory: Vec<u8>,
+    pub video_memory: Vec<super::types::Color>,
     pub registers: Vec<u8>,
     pub sp: u8,
     pub pc: u8,
@@ -28,6 +30,14 @@ pub enum OpcodeType {
     Nop = 0x90,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum VideoOpcodeType {
+    Fill = 0x01,
+    Clear = 0x02,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Register {
     R0 = 0,
     R1,
@@ -41,19 +51,17 @@ pub enum Register {
     Invalid,
 }
 
-impl Copy for Register {}
-
-impl Clone for Register {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
 pub struct Opcode {
     pub opcode_type: OpcodeType,
     pub argument_count: u8,
     pub arg1: OpcodeArg1,
     pub arg2: OpcodeArg2,
+}
+
+pub struct VideoOpcode {
+    pub opcode_type: VideoOpcodeType,
+    pub arg1: Option<u8>,
+    pub arg2: Option<u8>,
 }
 
 #[repr(transparent)]
@@ -89,7 +97,7 @@ impl MicroCVMCpu {
     pub fn empty() -> Self {
         Self {
             memory: vec![0; FREE_MEMORY],
-            video_memory: vec![0; VIDEO_MEMORY],
+            video_memory: vec![Color::new(0, 0, 0); VIDEO_MEMORY],
             registers: vec![0; 8],
             sp: 0,
             pc: 0,

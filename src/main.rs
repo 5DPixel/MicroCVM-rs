@@ -1,6 +1,7 @@
 mod cpu;
 mod disk;
 mod render;
+mod types;
 
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -26,6 +27,12 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
+
+    for i in 0..2000 {
+        vcpu.video_memory[i].r = 255;
+        vcpu.video_memory[i].g = 0;
+        vcpu.video_memory[i].b = 255;
+    }
 
     let mut app = render::App::new(768, 576, vcpu.video_memory);
     let _ = event_loop.run_app(&mut app);
