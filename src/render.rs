@@ -44,7 +44,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.render(self.video_memory.clone()); //Fix: Could cause memory leak
+                self.render();
                 self.window.as_ref().unwrap().request_redraw();
             }
             _ => (),
@@ -53,21 +53,21 @@ impl ApplicationHandler for App {
 }
 
 impl App {
-    fn render(&mut self, video_memory: Vec<super::types::Color>) {
+    fn render(&mut self) {
         if let Some(pixels) = self.pixels.as_mut() {
             let frame = pixels.frame_mut();
 
-            if video_memory.len() < frame.len() {
+            if self.video_memory.len() < frame.len() {
                 eprintln!(
                     "Error: Video memory size does not match framebuffer size. Frame size: {}, Video memory size: {}",
                     frame.len(),
-                    video_memory.len()
+                    self.video_memory.len()
                 );
                 return;
             }
 
             let mut byte_index = 0;
-            for color in video_memory {
+            for color in &self.video_memory {
                 if !(byte_index + 3 < frame.len()) {
                     break;
                 }
@@ -83,7 +83,7 @@ impl App {
     }
 
     pub fn new(width: u32, height: u32, video_memory: Vec<super::types::Color>) -> Self {
-        App {
+        Self {
             window: None,
             pixels: None,
             width,
