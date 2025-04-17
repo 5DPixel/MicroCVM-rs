@@ -26,8 +26,8 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         self.window = Some(window.clone());
 
-        let surface_texture = SurfaceTexture::new(self.width, self.height, window.clone());
-        let pixels = Pixels::new(self.width, self.height, surface_texture).unwrap();
+        let surface_texture = SurfaceTexture::new(self.width / 2, self.height / 2, window.clone());
+        let pixels = Pixels::new(self.width / 2, self.height / 2, surface_texture).unwrap();
 
         self.pixels = Some(pixels);
     }

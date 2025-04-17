@@ -28,7 +28,7 @@ fn main() {
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    for i in 0..vcpu.video_memory.len() {
+    for i in 0..2000 {
         vcpu.video_memory[i].r = 255;
         vcpu.video_memory[i].g = 0;
         vcpu.video_memory[i].b = 255;
