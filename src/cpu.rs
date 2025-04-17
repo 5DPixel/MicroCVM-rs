@@ -1,4 +1,6 @@
 use std::fmt::Display;
+use std::fs::File;
+use std::io::{self, Read};
 
 use crate::types::Color;
 
@@ -39,23 +41,22 @@ pub enum VideoOpcodeType {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Register {
-    R0 = 0,
-    R1,
-    R2,
-    R3,
-    R4,
-    R5,
-    R6,
-    R7,
-    R8,
-    Invalid,
+    R0 = 0x00,
+    R1 = 0x01,
+    R2 = 0x02,
+    R3 = 0x03,
+    R4 = 0x04,
+    R5 = 0x05,
+    R6 = 0x06,
+    R7 = 0x07,
+    Invalid = 0xFF,
 }
 
 pub struct Opcode {
     pub opcode_type: OpcodeType,
     pub argument_count: u8,
-    pub arg1: OpcodeArg1,
-    pub arg2: OpcodeArg2,
+    pub arg1: Option<OpcodeArg1>,
+    pub arg2: Option<OpcodeArg2>,
 }
 
 pub struct VideoOpcode {
@@ -82,15 +83,15 @@ impl Display for InvalidRegister {
     }
 }
 
-pub union OpcodeArg1 {
-    reg: Register,
-    address: u8,
+pub enum OpcodeArg1 {
+    Register(Register),
+    Address(u8),
 }
 
-pub union OpcodeArg2 {
-    reg: Register,
-    immediate: u8,
-    address: u8,
+pub enum OpcodeArg2 {
+    Register(Register),
+    Immediate(u8),
+    Address(u8),
 }
 
 impl MicroCVMCpu {
@@ -118,8 +119,8 @@ impl MicroCVMCpu {
 
     pub fn create_opcode(&mut self) -> Opcode {
         let mut current_instruction = Opcode::empty();
-        let opcode_byte: u8 = self.memory[self.pc as usize];
 
+        let opcode_byte: u8 = self.memory[self.pc as usize];
         current_instruction.opcode_type =
             OpcodeType::try_from(opcode_byte).unwrap_or(OpcodeType::Nop);
 
@@ -127,23 +128,21 @@ impl MicroCVMCpu {
             Self::get_opcode_argument_count(current_instruction.opcode_type);
 
         if current_instruction.argument_count >= 1 {
-            let arg1: u8 = self.memory[(self.pc + 1) as usize];
-            if arg1 < 8 {
-                current_instruction.arg2.reg =
-                    Register::try_from(arg1).unwrap_or(Register::Invalid);
+            let arg1 = self.memory[(self.pc + 1) as usize];
+            current_instruction.arg1 = Some(if arg1 < 8 {
+                OpcodeArg1::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
             } else {
-                current_instruction.arg1.address = arg1;
-            }
+                OpcodeArg1::Address(arg1)
+            });
         }
 
         if current_instruction.argument_count >= 2 {
-            let arg2: u8 = self.memory[(self.pc + 2) as usize];
-            if arg2 < 8 {
-                current_instruction.arg2.reg =
-                    Register::try_from(arg2).unwrap_or(Register::Invalid);
+            let arg2 = self.memory[(self.pc + 2) as usize];
+            current_instruction.arg2 = Some(if arg2 < 8 {
+                OpcodeArg2::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
             } else {
-                current_instruction.arg2.address = arg2;
-            }
+                OpcodeArg2::Address(arg2)
+            });
         }
 
         current_instruction
@@ -153,37 +152,87 @@ impl MicroCVMCpu {
         let opcode = self.create_opcode();
 
         match opcode.opcode_type {
-            OpcodeType::Inc => unsafe {
-                self.registers[opcode.arg1.reg as usize] += 1;
-            },
-            OpcodeType::Mov => unsafe {
-                self.registers[opcode.arg1.reg as usize] = opcode.arg2.immediate;
-            },
-            OpcodeType::Add => unsafe {
-                self.registers[opcode.arg1.reg as usize] += opcode.arg2.immediate;
-            },
-            OpcodeType::Sub => unsafe {
-                self.registers[opcode.arg1.reg as usize] -= opcode.arg2.immediate;
-            },
-            OpcodeType::Div => unsafe {
-                self.registers[opcode.arg1.reg as usize] /= opcode.arg2.immediate;
-            },
-            OpcodeType::Mul => unsafe {
-                self.registers[opcode.arg1.reg as usize] *= opcode.arg2.immediate;
-            },
+            OpcodeType::Inc => {
+                if let Some(OpcodeArg1::Register(reg)) = opcode.arg1 {
+                    self.registers[reg as usize] += 1;
+                }
+            }
+
+            OpcodeType::Mov => {
+                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.registers[dst as usize] = imm;
+                }
+            }
+
+            OpcodeType::Add => {
+                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.registers[dst as usize] += imm;
+                }
+            }
+
+            OpcodeType::Sub => {
+                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.registers[dst as usize] -= imm;
+                }
+            }
+
+            OpcodeType::Div => {
+                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.registers[dst as usize] /= imm;
+                }
+            }
+
+            OpcodeType::Mul => {
+                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.registers[dst as usize] *= imm;
+                }
+            }
+
             OpcodeType::Load => {
-                //To implement
+                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(addr))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.registers[dst as usize] = self.memory[addr as usize];
+                }
             }
+
             OpcodeType::Store => {
-                //To implement
+                if let (Some(OpcodeArg1::Address(addr)), Some(OpcodeArg2::Register(src))) =
+                    (opcode.arg1, opcode.arg2)
+                {
+                    self.memory[addr as usize] = self.registers[src as usize];
+                }
             }
+
             OpcodeType::Jmp => {
-                //To implement
+                if let Some(OpcodeArg1::Address(target)) = opcode.arg1 {
+                    self.pc = target;
+                }
             }
 
             OpcodeType::Nop => {}
             OpcodeType::Hlt => {}
         }
+    }
+
+    pub fn read_memory_from_file(&mut self, file_path: &str) -> io::Result<usize> {
+        let mut file = File::open(file_path)?;
+
+        self.memory.clear();
+
+        let bytes_read = file.read_to_end(&mut self.memory)?;
+
+        Ok(bytes_read)
     }
 }
 
@@ -192,8 +241,8 @@ impl Opcode {
         Self {
             opcode_type: OpcodeType::Nop,
             argument_count: 0,
-            arg1: OpcodeArg1 { reg: Register::R0 },
-            arg2: OpcodeArg2 { reg: Register::R0 },
+            arg1: None,
+            arg2: None,
         }
     }
 }
@@ -232,7 +281,6 @@ impl TryFrom<u8> for Register {
             5 => Ok(Register::R5),
             6 => Ok(Register::R6),
             7 => Ok(Register::R7),
-            8 => Ok(Register::R8),
             invalid => return Err(InvalidRegister(invalid)),
         }
     }
