@@ -9,7 +9,7 @@ impl MicroCVMDisk {
     pub fn empty() -> Self {
         Self {
             data: vec![0; DISK_SIZE],
-            filepath: String::from(""),
+            filepath: String::default(),
         }
     }
 }

@@ -9,10 +9,8 @@ const REGISTER_COUNT: usize = 18;
 pub struct MicroCVMCpu {
     pub memory: Vec<u8>,
     pub video_memory: Vec<super::types::Color>,
-    pub registers: Vec<u8>,
-    pub sp: u8,
+    pub registers: [u8; REGISTER_COUNT],
     pub pc: u8,
-    pub flags: u8,
 }
 
 #[repr(u8)]
@@ -29,7 +27,7 @@ pub enum OpcodeType {
     Div = 0x08,
     Mul = 0x09,
     Nop = 0x90,
-    Call = 0x0B,
+    Call = 0x0A,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,6 +52,15 @@ pub enum Register {
     Invalid = 0xFF,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum FunctionCall {
+    SetPixel = 0x13,
+    DrawLine = 0x14,
+    FillRect = 0x15,
+    ClearScreen = 0x16,
+}
+
 pub struct Opcode {
     pub opcode_type: OpcodeType,
     pub argument_count: u8,
@@ -73,11 +80,11 @@ impl Display for InvalidOpcode {
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct InvalidVideoOpcode(pub u8);
+pub struct InvalidFunctionCall(pub u8);
 
-impl Display for InvalidVideoOpcode {
+impl Display for InvalidFunctionCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid Opcode: {}", self.0)
+        write!(f, "Invalid Function Call: {}", self.0)
     }
 }
 
@@ -105,10 +112,8 @@ impl MicroCVMCpu {
         Self {
             memory: vec![0; FREE_MEMORY],
             video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
-            registers: vec![0; REGISTER_COUNT],
-            sp: 0,
+            registers: [0; REGISTER_COUNT],
             pc: 0,
-            flags: 0,
         }
     }
     pub fn get_opcode_argument_count(opcode_type: OpcodeType) -> u8 {
@@ -119,6 +124,7 @@ impl MicroCVMCpu {
             OpcodeType::Sub => 2,
             OpcodeType::Div => 2,
             OpcodeType::Mul => 2,
+            OpcodeType::Call => 1,
             _ => 0,
         }
     }
@@ -226,6 +232,22 @@ impl MicroCVMCpu {
                 }
             }
 
+            OpcodeType::Call => {
+                if let Some(OpcodeArg1::Address(target)) = opcode.arg1 {
+                    if target == FunctionCall::ClearScreen as u8 {
+                        let _ = super::screen::DrawCommand::clear_screen(self);
+                    }
+                    if target == FunctionCall::FillRect as u8 {
+                        let color = super::types::Color::new(
+                            self.registers[Register::V0 as usize],
+                            self.registers[Register::V1 as usize],
+                            self.registers[Register::V2 as usize],
+                        );
+                        let _ = super::screen::DrawCommand::fill_screen(self, color);
+                    }
+                }
+            }
+
             _ => {}
         }
 
@@ -270,6 +292,7 @@ impl TryFrom<u8> for OpcodeType {
             0x09 => Ok(OpcodeType::Mul),
             0xFF => Ok(OpcodeType::Hlt),
             0x90 => Ok(OpcodeType::Nop),
+            0x0A => Ok(OpcodeType::Call),
             invalid => return Err(InvalidOpcode(invalid)),
         }
     }
@@ -291,13 +314,25 @@ impl TryFrom<u8> for Register {
             8 => Ok(Register::V0),  // Red
             9 => Ok(Register::V1),  // Green
             10 => Ok(Register::V2), // Blue
-            11 => Ok(Register::V3), // Alpha
-            12 => Ok(Register::V4), // Line thickness
-            13 => Ok(Register::V5), // Starting x coordinate
-            14 => Ok(Register::V6), // Starting y coordinate
-            15 => Ok(Register::V7), // Ending x coordinate
-            16 => Ok(Register::V8), // Ending y coordinate
+            11 => Ok(Register::V3), // Line thickness
+            12 => Ok(Register::V4), // Starting x coordinate
+            13 => Ok(Register::V5), // Starting y coordinate
+            14 => Ok(Register::V6), // Ending x coordinate
             invalid => return Err(InvalidRegister(invalid)),
+        }
+    }
+}
+
+impl TryFrom<u8> for FunctionCall {
+    type Error = InvalidFunctionCall;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x13 => Ok(FunctionCall::SetPixel),
+            0x14 => Ok(FunctionCall::DrawLine),
+            0x15 => Ok(FunctionCall::FillRect),
+            0x16 => Ok(FunctionCall::ClearScreen),
+            invalid => return Err(InvalidFunctionCall(invalid)),
         }
     }
 }
