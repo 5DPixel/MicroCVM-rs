@@ -46,12 +46,11 @@ pub enum Register {
     V0 = 0x08, //Red
     V1 = 0x09, //Green
     V2 = 0x0A, //Blue
-    V3 = 0x0B, //Alpha (if applicable)
-    A4 = 0x0C, //Line thickness
-    V5 = 0x0D, //Starting x coordinate
-    V6 = 0x0E, //Starting y coordinate
-    V7 = 0x0F, //Ending x coordinate
-    V8 = 0x10, //Ending y coordinate
+    V3 = 0x0B, //Line thickness
+    V4 = 0x0C, //Starting x coordinate
+    V5 = 0x0D, //Starting y coordinate
+    V6 = 0x0E, //Ending x coordinate
+    V7 = 0x0F, //Ending y coordinate
     Invalid = 0xFF,
 }
 
@@ -293,7 +292,7 @@ impl TryFrom<u8> for Register {
             9 => Ok(Register::V1),  // Green
             10 => Ok(Register::V2), // Blue
             11 => Ok(Register::V3), // Alpha
-            12 => Ok(Register::A4), // Line thickness
+            12 => Ok(Register::V4), // Line thickness
             13 => Ok(Register::V5), // Starting x coordinate
             14 => Ok(Register::V6), // Starting y coordinate
             15 => Ok(Register::V7), // Ending x coordinate

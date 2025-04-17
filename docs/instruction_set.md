@@ -34,6 +34,21 @@ There are 8 general-purpose registers: `r0` through `r7`.
 
 ---
 
+There are also 8 video-argument registers: `v0` through `v7`.
+
+| Register | ID  |
+|----------|-----|
+| v0       | 0x08 |
+| v1       | 0x09 |
+| v2       | 0x0A |
+| v3       | 0x0B |
+| v4       | 0x0C |
+| v5       | 0x0D |
+| v6       | 0x0E |
+| v7       | 0x0F |
+
+---
+
 ## Opcodes
 
 | Mnemonic | Opcode (Hex) | Arguments | Description                          |
@@ -43,6 +58,8 @@ There are 8 general-purpose registers: `r0` through `r7`.
 | `mov`    | `0x01`       | reg, imm  | Sets a register to an immediate value |
 | `add`    | `0x02`       | reg, imm  | Adds an immediate to a register      |
 | `sub`    | `0x03`       | reg, imm  | Subtracts an immediate from a register |
+| `div`    | `0x08`       | reg, imm  | Divides an immediate with a register |
+| `mul`    | `0x09`       | reg, imm  | Multiplies an immediate with a register |
 
 ---
 
@@ -50,11 +67,11 @@ There are 8 general-purpose registers: `r0` through `r7`.
 
 | Assembly        | Machine Code (Hex) | Description                     |
 |-----------------|--------------------|---------------------------------|
-| `inc r0`        | `00 00`            | Increment register r0           |
-| `mov r1, 10`    | `01 01 0A`         | Move 10 into register r1        |
-| `add r2, 5`     | `02 02 05`         | Add 5 to register r2            |
-| `sub r3, 1`     | `03 03 01`         | Subtract 1 from register r3     |
-| `hlt`           | `FF`               | Stop execution                  |
+| `inc r0`        | `0x00 0x00`            | Increment register r0           |
+| `mov r1, 10`    | `0x01 0x01 0x0A`         | Move 10 into register r1        |
+| `add r2, 5`     | `0x02 0x02 0x05`         | Add 5 to register r2            |
+| `sub r3, 1`     | `0x03 0x03 0x01`         | Subtract 1 from register r3     |
+| `hlt`           | `0xFF`               | Stop execution                  |
 
 ---
 

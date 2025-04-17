@@ -36,10 +36,6 @@ fn main() {
         vcpu.pc += opcode_length;
     }
 
-    for register in &vcpu.registers {
-        println!("register value: {}", register);
-    }
-
     let event_loop = EventLoop::new().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
