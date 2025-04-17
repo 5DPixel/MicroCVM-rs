@@ -2,10 +2,9 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{self, Read};
 
-use crate::types::Color;
-
 const FREE_MEMORY: usize = 2048 * 1024;
 const VIDEO_MEMORY: usize = 1728 * 1024;
+const REGISTER_COUNT: usize = 18;
 
 pub struct MicroCVMCpu {
     pub memory: Vec<u8>,
@@ -30,13 +29,7 @@ pub enum OpcodeType {
     Div = 0x08,
     Mul = 0x09,
     Nop = 0x90,
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy)]
-pub enum VideoOpcodeType {
-    Fill = 0x01,
-    Clear = 0x02,
+    Call = 0x0B,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +42,16 @@ pub enum Register {
     R5 = 0x05,
     R6 = 0x06,
     R7 = 0x07,
+    // Video argument registers
+    V0 = 0x08, //Red
+    V1 = 0x09, //Green
+    V2 = 0x0A, //Blue
+    V3 = 0x0B, //Alpha (if applicable)
+    A4 = 0x0C, //Line thickness
+    V5 = 0x0D, //Starting x coordinate
+    V6 = 0x0E, //Starting y coordinate
+    V7 = 0x0F, //Ending x coordinate
+    V8 = 0x10, //Ending y coordinate
     Invalid = 0xFF,
 }
 
@@ -59,17 +62,21 @@ pub struct Opcode {
     pub arg2: Option<OpcodeArg2>,
 }
 
-pub struct VideoOpcode {
-    pub opcode_type: VideoOpcodeType,
-    pub arg1: Option<u8>,
-    pub arg2: Option<u8>,
-}
-
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct InvalidOpcode(pub u8);
 
 impl Display for InvalidOpcode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid Opcode: {}", self.0)
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct InvalidVideoOpcode(pub u8);
+
+impl Display for InvalidVideoOpcode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Invalid Opcode: {}", self.0)
     }
@@ -98,8 +105,8 @@ impl MicroCVMCpu {
     pub fn empty() -> Self {
         Self {
             memory: vec![0; FREE_MEMORY],
-            video_memory: vec![Color::new(0, 0, 0); VIDEO_MEMORY],
-            registers: vec![0; 8],
+            video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
+            registers: vec![0; REGISTER_COUNT],
             sp: 0,
             pc: 0,
             flags: 0,
@@ -129,7 +136,7 @@ impl MicroCVMCpu {
 
         if current_instruction.argument_count >= 1 {
             let arg1 = self.memory[(self.pc + 1) as usize];
-            current_instruction.arg1 = Some(if arg1 < 8 {
+            current_instruction.arg1 = Some(if arg1 < 19 {
                 OpcodeArg1::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
             } else {
                 OpcodeArg1::Address(arg1)
@@ -138,7 +145,7 @@ impl MicroCVMCpu {
 
         if current_instruction.argument_count >= 2 {
             let arg2 = self.memory[(self.pc + 2) as usize];
-            current_instruction.arg2 = Some(if arg2 < 8 {
+            current_instruction.arg2 = Some(if arg2 < 19 {
                 OpcodeArg2::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
             } else {
                 OpcodeArg2::Address(arg2)
@@ -148,7 +155,7 @@ impl MicroCVMCpu {
         current_instruction
     }
 
-    pub fn execute_instruction(&mut self) {
+    pub fn execute_instruction(&mut self) -> u8 {
         let opcode = self.create_opcode();
 
         match opcode.opcode_type {
@@ -220,9 +227,10 @@ impl MicroCVMCpu {
                 }
             }
 
-            OpcodeType::Nop => {}
-            OpcodeType::Hlt => {}
+            _ => {}
         }
+
+        opcode.argument_count + 1
     }
 
     pub fn read_memory_from_file(&mut self, file_path: &str) -> io::Result<usize> {
@@ -281,6 +289,15 @@ impl TryFrom<u8> for Register {
             5 => Ok(Register::R5),
             6 => Ok(Register::R6),
             7 => Ok(Register::R7),
+            8 => Ok(Register::V0),  // Red
+            9 => Ok(Register::V1),  // Green
+            10 => Ok(Register::V2), // Blue
+            11 => Ok(Register::V3), // Alpha
+            12 => Ok(Register::A4), // Line thickness
+            13 => Ok(Register::V5), // Starting x coordinate
+            14 => Ok(Register::V6), // Starting y coordinate
+            15 => Ok(Register::V7), // Ending x coordinate
+            16 => Ok(Register::V8), // Ending y coordinate
             invalid => return Err(InvalidRegister(invalid)),
         }
     }
