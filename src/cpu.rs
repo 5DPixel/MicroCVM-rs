@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 
 use crate::types::Color;
 
@@ -10,7 +10,7 @@ const VIDEO_MEMORY: usize = 1728 * 1024;
 pub struct MicroCVMCpu {
     pub memory: Vec<u8>,
     pub video_memory: Vec<super::types::Color>,
-    pub registers: Vec<u8>,
+    pub registers: [u8; 8],
     pub sp: u8,
     pub pc: u8,
     pub flags: u8,
@@ -49,7 +49,6 @@ pub enum Register {
     R5 = 0x05,
     R6 = 0x06,
     R7 = 0x07,
-    Invalid = 0xFF,
 }
 
 pub struct Opcode {
@@ -75,6 +74,7 @@ impl Display for InvalidOpcode {
     }
 }
 
+#[derive(Debug)]
 pub struct InvalidRegister(pub u8);
 
 impl Display for InvalidRegister {
@@ -99,7 +99,7 @@ impl MicroCVMCpu {
         Self {
             memory: vec![0; FREE_MEMORY],
             video_memory: vec![Color::new(0, 0, 0); VIDEO_MEMORY],
-            registers: vec![0; 8],
+            registers: [0; 8],
             sp: 0,
             pc: 0,
             flags: 0,
@@ -130,7 +130,7 @@ impl MicroCVMCpu {
         if current_instruction.argument_count >= 1 {
             let arg1 = self.memory[(self.pc + 1) as usize];
             current_instruction.arg1 = Some(if arg1 < 8 {
-                OpcodeArg1::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
+                OpcodeArg1::Register(Register::try_from(arg1).unwrap())
             } else {
                 OpcodeArg1::Address(arg1)
             });
@@ -139,7 +139,7 @@ impl MicroCVMCpu {
         if current_instruction.argument_count >= 2 {
             let arg2 = self.memory[(self.pc + 2) as usize];
             current_instruction.arg2 = Some(if arg2 < 8 {
-                OpcodeArg2::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
+                OpcodeArg2::Register(Register::try_from(arg2).unwrap())
             } else {
                 OpcodeArg2::Address(arg2)
             });
@@ -225,14 +225,12 @@ impl MicroCVMCpu {
         }
     }
 
-    pub fn read_memory_from_file(&mut self, file_path: &str) -> io::Result<usize> {
+    pub fn read_memory_from_file(&mut self, file_path: &str) -> io::Result<u64> {
         let mut file = File::open(file_path)?;
-
         self.memory.clear();
+        let read = std::io::copy(&mut file, &mut self.memory).unwrap();
 
-        let bytes_read = file.read_to_end(&mut self.memory)?;
-
-        Ok(bytes_read)
+        Ok(read)
     }
 }
 
@@ -251,20 +249,20 @@ impl TryFrom<u8> for OpcodeType {
     type Error = InvalidOpcode;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0x01 => Ok(OpcodeType::Load),
-            0x02 => Ok(OpcodeType::Store),
-            0x03 => Ok(OpcodeType::Add),
-            0x04 => Ok(OpcodeType::Sub),
-            0x05 => Ok(OpcodeType::Jmp),
-            0x06 => Ok(OpcodeType::Mov),
-            0x07 => Ok(OpcodeType::Inc),
-            0x08 => Ok(OpcodeType::Div),
-            0x09 => Ok(OpcodeType::Mul),
-            0xFF => Ok(OpcodeType::Hlt),
-            0x90 => Ok(OpcodeType::Nop),
+        Ok(match value {
+            0x01 => OpcodeType::Load,
+            0x02 => OpcodeType::Store,
+            0x03 => OpcodeType::Add,
+            0x04 => OpcodeType::Sub,
+            0x05 => OpcodeType::Jmp,
+            0x06 => OpcodeType::Mov,
+            0x07 => OpcodeType::Inc,
+            0x08 => OpcodeType::Div,
+            0x09 => OpcodeType::Mul,
+            0xFF => OpcodeType::Hlt,
+            0x90 => OpcodeType::Nop,
             invalid => return Err(InvalidOpcode(invalid)),
-        }
+        })
     }
 }
 
@@ -272,16 +270,16 @@ impl TryFrom<u8> for Register {
     type Error = InvalidRegister;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Register::R0),
-            1 => Ok(Register::R1),
-            2 => Ok(Register::R2),
-            3 => Ok(Register::R3),
-            4 => Ok(Register::R4),
-            5 => Ok(Register::R5),
-            6 => Ok(Register::R6),
-            7 => Ok(Register::R7),
+        Ok(match value {
+            0 => Register::R0,
+            1 => Register::R1,
+            2 => Register::R2,
+            3 => Register::R3,
+            4 => Register::R4,
+            5 => Register::R5,
+            6 => Register::R6,
+            7 => Register::R7,
             invalid => return Err(InvalidRegister(invalid)),
-        }
+        })
     }
 }
