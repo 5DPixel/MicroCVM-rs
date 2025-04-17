@@ -68,7 +68,7 @@ impl App {
 
             let mut byte_index = 0;
             for color in &self.video_memory {
-                if !(byte_index + 3 < frame.len()) {
+                if byte_index + 3 >= frame.len() {
                     break;
                 }
                 frame[byte_index] = color.r;
