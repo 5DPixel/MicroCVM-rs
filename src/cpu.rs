@@ -2,17 +2,15 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{self, Read};
 
-use crate::types::Point;
-
 const FREE_MEMORY: usize = 2048 * 1024;
 const VIDEO_MEMORY: usize = 1728 * 1024;
 const REGISTER_COUNT: usize = 18;
 
 pub struct MicroCVMCpu {
-    pub memory: Vec<u8>,
+    pub memory: Vec<u16>,
     pub video_memory: Vec<super::types::Color>,
-    pub registers: [u8; REGISTER_COUNT],
-    pub pc: u8,
+    pub registers: [u16; REGISTER_COUNT],
+    pub pc: u16,
     pub framebuffer_width: usize,
     pub framebuffer_height: usize,
 }
@@ -67,14 +65,14 @@ pub enum FunctionCall {
 
 pub struct Opcode {
     pub opcode_type: OpcodeType,
-    pub argument_count: u8,
+    pub argument_count: u16,
     pub arg1: Option<OpcodeArg1>,
     pub arg2: Option<OpcodeArg2>,
 }
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct InvalidOpcode(pub u8);
+pub struct InvalidOpcode(pub u16);
 
 impl Display for InvalidOpcode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -84,7 +82,7 @@ impl Display for InvalidOpcode {
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct InvalidFunctionCall(pub u8);
+pub struct InvalidFunctionCall(pub u16);
 
 impl Display for InvalidFunctionCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -92,7 +90,7 @@ impl Display for InvalidFunctionCall {
     }
 }
 
-pub struct InvalidRegister(pub u8);
+pub struct InvalidRegister(pub u16);
 
 impl Display for InvalidRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -102,19 +100,19 @@ impl Display for InvalidRegister {
 
 pub enum OpcodeArg1 {
     Register(Register),
-    Address(u8),
+    Address(u16),
 }
 
 pub enum OpcodeArg2 {
     Register(Register),
-    Immediate(u8),
-    Address(u8),
+    Immediate(u16),
+    Address(u16),
 }
 
 impl MicroCVMCpu {
     pub fn empty() -> Self {
         Self {
-            memory: vec![0; FREE_MEMORY],
+            memory: vec![0; FREE_MEMORY / 2],
             video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
             registers: [0; REGISTER_COUNT],
             pc: 0,
@@ -138,12 +136,13 @@ impl MicroCVMCpu {
     pub fn create_opcode(&mut self) -> Opcode {
         let mut current_instruction = Opcode::empty();
 
-        let opcode_byte: u8 = self.memory[self.pc as usize];
+        let opcode_word = self.memory[self.pc as usize];
+        let opcode_byte = (opcode_word & 0xFF) as u8;
         current_instruction.opcode_type =
-            OpcodeType::try_from(opcode_byte).unwrap_or(OpcodeType::Nop);
+            OpcodeType::try_from(opcode_byte as u16).unwrap_or(OpcodeType::Nop);
 
         current_instruction.argument_count =
-            Self::get_opcode_argument_count(current_instruction.opcode_type);
+            Self::get_opcode_argument_count(current_instruction.opcode_type) as u16;
 
         if current_instruction.argument_count >= 1 {
             let arg1 = self.memory[(self.pc + 1) as usize];
@@ -166,7 +165,7 @@ impl MicroCVMCpu {
         current_instruction
     }
 
-    pub fn execute_instruction(&mut self) -> u8 {
+    pub fn execute_instruction(&mut self) -> u16 {
         let opcode = self.create_opcode();
 
         match opcode.opcode_type {
@@ -228,7 +227,7 @@ impl MicroCVMCpu {
                 if let (Some(OpcodeArg1::Address(addr)), Some(OpcodeArg2::Register(src))) =
                     (opcode.arg1, opcode.arg2)
                 {
-                    self.memory[addr as usize] = self.registers[src as usize];
+                    self.memory[(addr / 2) as usize] = self.registers[src as usize];
                 }
             }
 
@@ -240,22 +239,22 @@ impl MicroCVMCpu {
 
             OpcodeType::Call => {
                 if let Some(OpcodeArg1::Address(target)) = opcode.arg1 {
-                    if target == FunctionCall::ClearScreen as u8 {
+                    if target == FunctionCall::ClearScreen as u16 {
                         let _ = super::screen::DrawCommand::clear_screen(self);
                     }
-                    if target == FunctionCall::FillRect as u8 {
+                    if target == FunctionCall::FillRect as u16 {
                         let color = super::types::Color::new(
-                            self.registers[Register::V0 as usize],
-                            self.registers[Register::V1 as usize],
-                            self.registers[Register::V2 as usize],
+                            self.registers[Register::V0 as usize] as u8,
+                            self.registers[Register::V1 as usize] as u8,
+                            self.registers[Register::V2 as usize] as u8,
                         );
                         let _ = super::screen::DrawCommand::fill_screen(self, color);
                     }
-                    if target == FunctionCall::DrawLine as u8 {
+                    if target == FunctionCall::DrawLine as u16 {
                         let color = super::types::Color::new(
-                            self.registers[Register::V0 as usize],
-                            self.registers[Register::V1 as usize],
-                            self.registers[Register::V2 as usize],
+                            self.registers[Register::V0 as usize] as u8,
+                            self.registers[Register::V1 as usize] as u8,
+                            self.registers[Register::V2 as usize] as u8,
                         );
                         let line_start = super::types::Point::new(
                             self.registers[Register::V4 as usize] as isize,
@@ -280,10 +279,20 @@ impl MicroCVMCpu {
 
     pub fn read_memory_from_file(&mut self, file_path: &str) -> io::Result<usize> {
         let mut file = File::open(file_path)?;
+        let mut buffer = Vec::new();
+        let bytes_read = file.read_to_end(&mut buffer)?;
+
+        if buffer.len() % 2 != 0 {
+            buffer.push(0x00);
+        }
 
         self.memory.clear();
+        self.memory.reserve(buffer.len() / 2);
 
-        let bytes_read = file.read_to_end(&mut self.memory)?;
+        for chunk in buffer.chunks_exact(2) {
+            let word = u16::from_le_bytes([chunk[0], chunk[1]]);
+            self.memory.push(word);
+        }
 
         Ok(bytes_read)
     }
@@ -300,10 +309,10 @@ impl Opcode {
     }
 }
 
-impl TryFrom<u8> for OpcodeType {
+impl TryFrom<u16> for OpcodeType {
     type Error = InvalidOpcode;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
             0x01 => Ok(OpcodeType::Load),
             0x02 => Ok(OpcodeType::Store),
@@ -322,10 +331,10 @@ impl TryFrom<u8> for OpcodeType {
     }
 }
 
-impl TryFrom<u8> for Register {
+impl TryFrom<u16> for Register {
     type Error = InvalidRegister;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Register::R0),
             1 => Ok(Register::R1),
@@ -348,10 +357,10 @@ impl TryFrom<u8> for Register {
     }
 }
 
-impl TryFrom<u8> for FunctionCall {
+impl TryFrom<u16> for FunctionCall {
     type Error = InvalidFunctionCall;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
             0x13 => Ok(FunctionCall::SetPixel),
             0x14 => Ok(FunctionCall::DrawLine),
