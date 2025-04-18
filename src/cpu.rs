@@ -463,7 +463,7 @@ impl TryFrom<&str> for FunctionCall {
         match value {
             "set_pixel" => Ok(FunctionCall::SetPixel),
             "draw_line" => Ok(FunctionCall::DrawLine),
-            "fill_rect" => Ok(FunctionCall::FillRect),
+            "fill_screen" => Ok(FunctionCall::FillRect),
             "clear_screen" => Ok(FunctionCall::ClearScreen),
             invalid => Err(InvalidFunctionCallString(invalid.to_string())),
         }
