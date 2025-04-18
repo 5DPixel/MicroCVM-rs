@@ -44,7 +44,7 @@ impl DrawCommand {
     }
 
     pub fn get_index_from_coordinate(coordinate: super::types::Point, width: isize) -> isize {
-        coordinate.y * (width as isize / 2) + coordinate.x
+        coordinate.y * (width as isize) + coordinate.x
     }
 
     pub fn draw_line(
