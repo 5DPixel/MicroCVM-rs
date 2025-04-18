@@ -80,6 +80,14 @@ impl Display for InvalidOpcode {
     }
 }
 
+pub struct InvalidOpcodeString(pub String);
+
+impl Display for InvalidOpcodeString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid Opcode: {}", self.0)
+    }
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct InvalidFunctionCall(pub u16);
@@ -95,6 +103,22 @@ pub struct InvalidRegister(pub u16);
 impl Display for InvalidRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Invalid Register: {}", self.0)
+    }
+}
+
+pub struct InvalidRegisterString(pub String);
+
+impl Display for InvalidRegisterString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid Register: {}", self.0)
+    }
+}
+
+pub struct InvalidFunctionCallString(pub String);
+
+impl Display for InvalidFunctionCallString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid Function Call: {}", self.0)
     }
 }
 
@@ -294,6 +318,11 @@ impl MicroCVMCpu {
             self.memory.push(word);
         }
 
+        let new_len = self.memory.len();
+        if new_len < FREE_MEMORY {
+            self.memory.extend(vec![0u16; FREE_MEMORY - new_len]);
+        }
+
         Ok(bytes_read)
     }
 }
@@ -331,6 +360,28 @@ impl TryFrom<u16> for OpcodeType {
     }
 }
 
+impl TryFrom<&str> for OpcodeType {
+    type Error = InvalidOpcodeString;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "load" => Ok(OpcodeType::Load),
+            "store" => Ok(OpcodeType::Store),
+            "add" => Ok(OpcodeType::Add),
+            "sub" => Ok(OpcodeType::Sub),
+            "jmp" => Ok(OpcodeType::Jmp),
+            "hlt" => Ok(OpcodeType::Hlt),
+            "mov" => Ok(OpcodeType::Mov),
+            "inc" => Ok(OpcodeType::Inc),
+            "div" => Ok(OpcodeType::Div),
+            "mul" => Ok(OpcodeType::Mul),
+            "nop" => Ok(OpcodeType::Nop),
+            "call" => Ok(OpcodeType::Call),
+            invalid => return Err(InvalidOpcodeString(invalid.to_string())),
+        }
+    }
+}
+
 impl TryFrom<u16> for Register {
     type Error = InvalidRegister;
 
@@ -357,6 +408,33 @@ impl TryFrom<u16> for Register {
     }
 }
 
+impl TryFrom<&str> for Register {
+    type Error = InvalidRegisterString;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "r0" => Ok(Register::R0),
+            "r1" => Ok(Register::R1),
+            "r2" => Ok(Register::R2),
+            "r3" => Ok(Register::R3),
+            "r4" => Ok(Register::R4),
+            "r5" => Ok(Register::R5),
+            "r6" => Ok(Register::R6),
+            "r7" => Ok(Register::R7),
+            //Video opcodes
+            "v0" => Ok(Register::V0),
+            "v1" => Ok(Register::V1),
+            "v2" => Ok(Register::V2),
+            "v3" => Ok(Register::V3),
+            "v4" => Ok(Register::V4),
+            "v5" => Ok(Register::V5),
+            "v6" => Ok(Register::V6),
+            "v7" => Ok(Register::V7),
+            invalid => Err(InvalidRegisterString(invalid.to_string())),
+        }
+    }
+}
+
 impl TryFrom<u16> for FunctionCall {
     type Error = InvalidFunctionCall;
 
@@ -367,6 +445,20 @@ impl TryFrom<u16> for FunctionCall {
             0x15 => Ok(FunctionCall::FillRect),
             0x16 => Ok(FunctionCall::ClearScreen),
             invalid => return Err(InvalidFunctionCall(invalid)),
+        }
+    }
+}
+
+impl TryFrom<&str> for FunctionCall {
+    type Error = InvalidFunctionCallString;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "set_pixel" => Ok(FunctionCall::SetPixel),
+            "draw_line" => Ok(FunctionCall::DrawLine),
+            "fill_rect" => Ok(FunctionCall::FillRect),
+            "clear_screen" => Ok(FunctionCall::ClearScreen),
+            invalid => Err(InvalidFunctionCallString(invalid.to_string())),
         }
     }
 }
