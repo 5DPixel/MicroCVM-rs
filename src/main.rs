@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
     let mut vcpu = cpu::MicroCVMCpu::empty();
-    let mut vdisk = disk::MicroCVMDisk::empty();
+    //let mut vdisk = disk::MicroCVMDisk::empty();
 
     match vcpu.read_memory_from_file("../../examples/draw_line.bin") {
         Ok(_) => {}
@@ -16,12 +16,6 @@ fn main() {
             eprintln!("error reading binary: {}", e);
         }
     }
-    // vcpu.memory[3] = cpu::OpcodeType::Mov as u16;
-    // vcpu.memory[4] = 255;
-    // vcpu.memory[5] = cpu::Register::V1 as u16;
-    // vcpu.memory[6] = cpu::OpcodeType::Hlt as u16;
-    // vcpu.memory[3] = cpu::OpcodeType::Hlt as u16;
-    //println!("{:?}", vcpu.memory);
 
     loop {
         let opcode: u16 = vcpu.memory[vcpu.pc as usize];
@@ -32,6 +26,11 @@ fn main() {
 
         vcpu.pc += opcode_length;
     }
+
+    println!(
+        "{}",
+        vcpu.registers[cpu::Register::index(cpu::Register::R0) as usize]
+    );
 
     let event_loop = EventLoop::new().unwrap();
 

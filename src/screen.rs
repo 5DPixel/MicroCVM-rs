@@ -1,46 +1,16 @@
-use std::fmt;
-
-#[derive(Debug)]
-pub struct DrawCommandError {
-    message: String,
-}
-
-impl DrawCommandError {
-    pub fn new(message: &str) -> Self {
-        Self {
-            message: message.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for DrawCommandError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "DrawCommandError: {}", self.message)
-    }
-}
-
-impl std::error::Error for DrawCommandError {}
-
 pub struct DrawCommand();
 
 impl DrawCommand {
-    pub fn fill_screen(
-        cpu: &mut super::cpu::MicroCVMCpu,
-        color: super::types::Color,
-    ) -> Result<(), DrawCommandError> {
+    pub fn fill_screen(cpu: &mut super::cpu::MicroCVMCpu, color: super::types::Color) {
         for i in 0..cpu.video_memory.len() {
             cpu.video_memory[i].r = color.r;
             cpu.video_memory[i].g = color.g;
             cpu.video_memory[i].b = color.b;
         }
-
-        Ok(())
-        //Add error handling later
     }
 
-    pub fn clear_screen(cpu: &mut super::cpu::MicroCVMCpu) -> Result<(), DrawCommandError> {
+    pub fn clear_screen(cpu: &mut super::cpu::MicroCVMCpu) {
         cpu.video_memory.fill(super::types::Color::new(0, 0, 0));
-        Ok(())
     }
 
     pub fn get_index_from_coordinate(coordinate: super::types::Point, width: isize) -> isize {
@@ -52,6 +22,7 @@ impl DrawCommand {
         color: super::types::Color,
         line_start: super::types::Point,
         line_end: super::types::Point,
+        thickness: isize,
     ) {
         let width = cpu.framebuffer_width / 2;
         let height = cpu.framebuffer_height / 2;
@@ -68,13 +39,25 @@ impl DrawCommand {
         let sy = if y0 < y1 { 1 } else { -1 };
         let mut err = dx + dy;
 
+        let radius = thickness as f32 / 2.0;
+        let radius_squared = radius * radius;
+
         loop {
-            if x0 >= 0 && x0 < width as isize && y0 >= 0 && y0 < height as isize {
-                let index = Self::get_index_from_coordinate(
-                    super::types::Point::new(x0, y0),
-                    width as isize,
-                );
-                cpu.video_memory[index as usize] = color;
+            for offset_y in -thickness..=thickness {
+                for offset_x in -thickness..=thickness {
+                    if (offset_x * offset_x + offset_y * offset_y) as f32 <= radius_squared {
+                        let tx = x0 + offset_x;
+                        let ty = y0 + offset_y;
+
+                        if tx >= 0 && tx < width as isize && ty >= 0 && ty < height as isize {
+                            let index = Self::get_index_from_coordinate(
+                                super::types::Point::new(tx, ty),
+                                width as isize,
+                            );
+                            cpu.video_memory[index as usize] = color;
+                        }
+                    }
+                }
             }
 
             if x0 == x1 && y0 == y1 {

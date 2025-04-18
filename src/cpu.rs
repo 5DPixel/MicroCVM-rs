@@ -15,7 +15,7 @@ pub struct MicroCVMCpu {
     pub framebuffer_height: usize,
 }
 
-#[repr(u8)]
+#[repr(u16)]
 #[derive(Debug, Clone, Copy)]
 pub enum OpcodeType {
     Load = 0x01,
@@ -32,27 +32,29 @@ pub enum OpcodeType {
     Call = 0x0A,
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
 pub enum Register {
-    R0 = 0x01,
-    R1 = 0x02,
-    R2 = 0x03,
-    R3 = 0x04,
-    R4 = 0x05,
-    R5 = 0x06,
-    R6 = 0x07,
-    R7 = 0x08,
+    R0 = 0x1001,
+    R1 = 0x1002,
+    R2 = 0x1003,
+    R3 = 0x1004,
+    R4 = 0x1005,
+    R5 = 0x1006,
+    R6 = 0x1007,
+    R7 = 0x1008,
+
     // Video argument registers
-    V0 = 0x09, // Red
-    V1 = 0x0A, // Green
-    V2 = 0x0B, // Blue
-    V3 = 0x0C, // Line thickness
-    V4 = 0x0D, // Starting x coordinate
-    V5 = 0x0E, // Starting y coordinate
-    V6 = 0x0F, // Ending x coordinate
-    V7 = 0x10, // Ending y coordinate
-    Invalid = 0xFF,
+    V0 = 0x2001, // Red
+    V1 = 0x2002, // Green
+    V2 = 0x2003, // Blue
+    V3 = 0x2004, // Line thickness
+    V4 = 0x2005, // Starting x coordinate
+    V5 = 0x2006, // Starting y coordinate
+    V6 = 0x2007, // Ending x coordinate
+    V7 = 0x2008, // Ending y coordinate
+
+    Invalid = 0xFFFF,
 }
 
 #[repr(u8)]
@@ -167,20 +169,20 @@ impl MicroCVMCpu {
 
         if current_instruction.argument_count >= 1 {
             let arg1 = self.memory[(self.pc + 1) as usize];
-            current_instruction.arg1 = Some(if arg1 < REGISTER_COUNT as u16 {
-                OpcodeArgument::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
-            } else {
-                OpcodeArgument::Immediate(arg1)
-            });
+            current_instruction.arg1 = Some(
+                Register::try_from(arg1)
+                    .map(OpcodeArgument::Register)
+                    .unwrap_or(OpcodeArgument::Immediate(arg1)),
+            );
         }
 
         if current_instruction.argument_count >= 2 {
             let arg2 = self.memory[(self.pc + 2) as usize];
-            current_instruction.arg2 = Some(if arg2 < REGISTER_COUNT as u16 {
-                OpcodeArgument::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
-            } else {
-                OpcodeArgument::Immediate(arg2)
-            });
+            current_instruction.arg2 = Some(
+                Register::try_from(arg2)
+                    .map(OpcodeArgument::Register)
+                    .unwrap_or(OpcodeArgument::Immediate(arg2)),
+            );
         }
 
         current_instruction
@@ -192,7 +194,7 @@ impl MicroCVMCpu {
         match opcode.opcode_type {
             OpcodeType::Inc => {
                 if let Some(OpcodeArgument::Register(reg)) = opcode.arg1 {
-                    self.registers[reg as usize] += 1;
+                    self.registers[Register::index(reg) as usize] += 1;
                 }
             }
 
@@ -200,7 +202,7 @@ impl MicroCVMCpu {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
                     (opcode.arg2, opcode.arg1)
                 {
-                    self.registers[dst as usize] = imm;
+                    self.registers[Register::index(dst) as usize] = imm;
                 }
             }
 
@@ -208,7 +210,7 @@ impl MicroCVMCpu {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
                     (opcode.arg1, opcode.arg2)
                 {
-                    self.registers[dst as usize] += imm;
+                    self.registers[Register::index(dst) as usize] += imm;
                 }
             }
 
@@ -216,7 +218,7 @@ impl MicroCVMCpu {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
                     (opcode.arg2, opcode.arg1)
                 {
-                    self.registers[dst as usize] -= imm;
+                    self.registers[Register::index(dst) as usize] -= imm;
                 }
             }
 
@@ -224,7 +226,7 @@ impl MicroCVMCpu {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
                     (opcode.arg2, opcode.arg1)
                 {
-                    self.registers[dst as usize] /= imm;
+                    self.registers[Register::index(dst) as usize] /= imm;
                 }
             }
 
@@ -232,7 +234,7 @@ impl MicroCVMCpu {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
                     (opcode.arg2, opcode.arg1)
                 {
-                    self.registers[dst as usize] *= imm;
+                    self.registers[Register::index(dst) as usize] *= imm;
                 }
             }
 
@@ -242,7 +244,7 @@ impl MicroCVMCpu {
                     Some(OpcodeArgument::Immediate(addr)),
                 ) = (opcode.arg2, opcode.arg1)
                 {
-                    self.registers[dst as usize] = self.memory[addr as usize];
+                    self.registers[Register::index(dst) as usize] = self.memory[addr as usize];
                 }
             }
 
@@ -252,7 +254,8 @@ impl MicroCVMCpu {
                     Some(OpcodeArgument::Register(src)),
                 ) = (opcode.arg2, opcode.arg1)
                 {
-                    self.memory[(addr / 2) as usize] = self.registers[src as usize];
+                    self.memory[(addr / 2) as usize] =
+                        self.registers[Register::index(src) as usize];
                 }
             }
 
@@ -269,28 +272,30 @@ impl MicroCVMCpu {
                     }
                     if target == FunctionCall::FillRect as u16 {
                         let color = super::types::Color::new(
-                            self.registers[Register::V0 as usize] as u8,
-                            self.registers[Register::V1 as usize] as u8,
-                            self.registers[Register::V2 as usize] as u8,
+                            self.registers[Register::index(Register::V0) as usize] as u8,
+                            self.registers[Register::index(Register::V1) as usize] as u8,
+                            self.registers[Register::index(Register::V2) as usize] as u8,
                         );
                         let _ = super::screen::DrawCommand::fill_screen(self, color);
                     }
                     if target == FunctionCall::DrawLine as u16 {
                         let color = super::types::Color::new(
-                            self.registers[Register::V0 as usize] as u8,
-                            self.registers[Register::V1 as usize] as u8,
-                            self.registers[Register::V2 as usize] as u8,
+                            self.registers[Register::index(Register::V0) as usize] as u8,
+                            self.registers[Register::index(Register::V1) as usize] as u8,
+                            self.registers[Register::index(Register::V2) as usize] as u8,
                         );
                         let line_start = super::types::Point::new(
-                            self.registers[Register::V4 as usize] as isize,
-                            self.registers[Register::V5 as usize] as isize,
+                            self.registers[Register::index(Register::V4) as usize] as isize,
+                            self.registers[Register::index(Register::V5) as usize] as isize,
                         );
                         let line_end = super::types::Point::new(
-                            self.registers[Register::V6 as usize] as isize,
-                            self.registers[Register::V7 as usize] as isize,
+                            self.registers[Register::index(Register::V6) as usize] as isize,
+                            self.registers[Register::index(Register::V7) as usize] as isize,
                         );
+                        let thickness =
+                            self.registers[Register::index(Register::V3) as usize] as isize;
                         let _ = super::screen::DrawCommand::draw_line(
-                            self, color, line_start, line_end,
+                            self, color, line_start, line_end, thickness,
                         );
                     }
                 }
@@ -387,23 +392,25 @@ impl TryFrom<u16> for Register {
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
-            0x01 => Ok(Register::R0),
-            0x02 => Ok(Register::R1),
-            0x03 => Ok(Register::R2),
-            0x04 => Ok(Register::R3),
-            0x05 => Ok(Register::R4),
-            0x06 => Ok(Register::R5),
-            0x07 => Ok(Register::R6),
-            0x08 => Ok(Register::R7),
-            0x09 => Ok(Register::V0), // Red
-            0x0A => Ok(Register::V1), // Green
-            0x0B => Ok(Register::V2), // Blue
-            0x0C => Ok(Register::V3), // Line thickness
-            0x0D => Ok(Register::V4), // Starting x coordinate
-            0x0E => Ok(Register::V5), // Starting y coordinate
-            0x0F => Ok(Register::V6), // Ending x coordinate
-            0x10 => Ok(Register::V7),
-            invalid => return Err(InvalidRegister(invalid)),
+            0x1001 => Ok(Register::R0),
+            0x1002 => Ok(Register::R1),
+            0x1003 => Ok(Register::R2),
+            0x1004 => Ok(Register::R3),
+            0x1005 => Ok(Register::R4),
+            0x1006 => Ok(Register::R5),
+            0x1007 => Ok(Register::R6),
+            0x1008 => Ok(Register::R7),
+            //Video registers
+            0x2001 => Ok(Register::V0), // Red
+            0x2002 => Ok(Register::V1), // Green
+            0x2003 => Ok(Register::V2), // Blue
+            0x2004 => Ok(Register::V3), // Line thickness
+            0x2005 => Ok(Register::V4), // Starting x coordinate
+            0x2006 => Ok(Register::V5), // Starting y coordinate
+            0x2007 => Ok(Register::V6), // Ending x coordinate
+            0x2008 => Ok(Register::V7), // Ending y coordinate
+
+            _ => Err(InvalidRegister(value)),
         }
     }
 }
@@ -459,6 +466,31 @@ impl TryFrom<&str> for FunctionCall {
             "fill_rect" => Ok(FunctionCall::FillRect),
             "clear_screen" => Ok(FunctionCall::ClearScreen),
             invalid => Err(InvalidFunctionCallString(invalid.to_string())),
+        }
+    }
+}
+
+impl Register {
+    pub fn index(self) -> usize {
+        match self {
+            Register::R0 => 0,
+            Register::R1 => 1,
+            Register::R2 => 2,
+            Register::R3 => 3,
+            Register::R4 => 4,
+            Register::R5 => 5,
+            Register::R6 => 6,
+            Register::R7 => 7,
+            //Video registers
+            Register::V0 => 8,
+            Register::V1 => 9,
+            Register::V2 => 10,
+            Register::V3 => 11,
+            Register::V4 => 12,
+            Register::V5 => 13,
+            Register::V6 => 14,
+            Register::V7 => 15,
+            Register::Invalid => 255,
         }
     }
 }
