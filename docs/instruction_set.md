@@ -55,7 +55,7 @@ There are also 8 video-argument registers: `v0` through `v7`.
 |----------|--------------|-----------|--------------------------------------|
 | `hlt`    | `0xFF`       | 0         | Halts the CPU                        |
 | `inc`    | `0x00`       | reg       | Increments a register                |
-| `mov`    | `0x01`       | reg, imm  | Sets a register to an immediate value |
+| `mov`    | `0x06`       | reg, imm  | Sets a register to an immediate value |
 | `add`    | `0x02`       | reg, imm  | Adds an immediate to a register      |
 | `sub`    | `0x03`       | reg, imm  | Subtracts an immediate from a register |
 | `div`    | `0x08`       | reg, imm  | Divides an immediate with a register |

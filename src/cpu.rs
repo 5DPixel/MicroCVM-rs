@@ -2,6 +2,8 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{self, Read};
 
+use crate::types::Point;
+
 const FREE_MEMORY: usize = 2048 * 1024;
 const VIDEO_MEMORY: usize = 1728 * 1024;
 const REGISTER_COUNT: usize = 18;
@@ -11,6 +13,8 @@ pub struct MicroCVMCpu {
     pub video_memory: Vec<super::types::Color>,
     pub registers: [u8; REGISTER_COUNT],
     pub pc: u8,
+    pub framebuffer_width: usize,
+    pub framebuffer_height: usize,
 }
 
 #[repr(u8)]
@@ -114,6 +118,8 @@ impl MicroCVMCpu {
             video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
             registers: [0; REGISTER_COUNT],
             pc: 0,
+            framebuffer_width: 768,
+            framebuffer_height: 576,
         }
     }
     pub fn get_opcode_argument_count(opcode_type: OpcodeType) -> u8 {
@@ -141,7 +147,7 @@ impl MicroCVMCpu {
 
         if current_instruction.argument_count >= 1 {
             let arg1 = self.memory[(self.pc + 1) as usize];
-            current_instruction.arg1 = Some(if arg1 < 19 {
+            current_instruction.arg1 = Some(if arg1 < 16 {
                 OpcodeArg1::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
             } else {
                 OpcodeArg1::Address(arg1)
@@ -150,7 +156,7 @@ impl MicroCVMCpu {
 
         if current_instruction.argument_count >= 2 {
             let arg2 = self.memory[(self.pc + 2) as usize];
-            current_instruction.arg2 = Some(if arg2 < 19 {
+            current_instruction.arg2 = Some(if arg2 < 16 {
                 OpcodeArg2::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
             } else {
                 OpcodeArg2::Address(arg2)
@@ -245,6 +251,24 @@ impl MicroCVMCpu {
                         );
                         let _ = super::screen::DrawCommand::fill_screen(self, color);
                     }
+                    if target == FunctionCall::DrawLine as u8 {
+                        let color = super::types::Color::new(
+                            self.registers[Register::V0 as usize],
+                            self.registers[Register::V1 as usize],
+                            self.registers[Register::V2 as usize],
+                        );
+                        let line_start = super::types::Point::new(
+                            self.registers[Register::V4 as usize] as isize,
+                            self.registers[Register::V5 as usize] as isize,
+                        );
+                        let line_end = super::types::Point::new(
+                            self.registers[Register::V6 as usize] as isize,
+                            self.registers[Register::V7 as usize] as isize,
+                        );
+                        let _ = super::screen::DrawCommand::draw_line(
+                            self, color, line_start, line_end,
+                        );
+                    }
                 }
             }
 
@@ -318,6 +342,7 @@ impl TryFrom<u8> for Register {
             12 => Ok(Register::V4), // Starting x coordinate
             13 => Ok(Register::V5), // Starting y coordinate
             14 => Ok(Register::V6), // Ending x coordinate
+            15 => Ok(Register::V7),
             invalid => return Err(InvalidRegister(invalid)),
         }
     }
