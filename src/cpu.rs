@@ -33,24 +33,25 @@ pub enum OpcodeType {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(u8)]
 pub enum Register {
-    R0 = 0x00,
-    R1 = 0x01,
-    R2 = 0x02,
-    R3 = 0x03,
-    R4 = 0x04,
-    R5 = 0x05,
-    R6 = 0x06,
-    R7 = 0x07,
+    R0 = 0x01,
+    R1 = 0x02,
+    R2 = 0x03,
+    R3 = 0x04,
+    R4 = 0x05,
+    R5 = 0x06,
+    R6 = 0x07,
+    R7 = 0x08,
     // Video argument registers
-    V0 = 0x08, //Red
-    V1 = 0x09, //Green
-    V2 = 0x0A, //Blue
-    V3 = 0x0B, //Line thickness
-    V4 = 0x0C, //Starting x coordinate
-    V5 = 0x0D, //Starting y coordinate
-    V6 = 0x0E, //Ending x coordinate
-    V7 = 0x0F, //Ending y coordinate
+    V0 = 0x09, // Red
+    V1 = 0x0A, // Green
+    V2 = 0x0B, // Blue
+    V3 = 0x0C, // Line thickness
+    V4 = 0x0D, // Starting x coordinate
+    V5 = 0x0E, // Starting y coordinate
+    V6 = 0x0F, // Ending x coordinate
+    V7 = 0x10, // Ending y coordinate
     Invalid = 0xFF,
 }
 
@@ -63,11 +64,12 @@ pub enum FunctionCall {
     ClearScreen = 0x16,
 }
 
+#[derive(Debug)]
 pub struct Opcode {
     pub opcode_type: OpcodeType,
     pub argument_count: u16,
-    pub arg1: Option<OpcodeArg1>,
-    pub arg2: Option<OpcodeArg2>,
+    pub arg1: Option<OpcodeArgument>,
+    pub arg2: Option<OpcodeArgument>,
 }
 
 #[repr(transparent)]
@@ -122,15 +124,10 @@ impl Display for InvalidFunctionCallString {
     }
 }
 
-pub enum OpcodeArg1 {
-    Register(Register),
-    Address(u16),
-}
-
-pub enum OpcodeArg2 {
+#[derive(Debug)]
+pub enum OpcodeArgument {
     Register(Register),
     Immediate(u16),
-    Address(u16),
 }
 
 impl MicroCVMCpu {
@@ -170,19 +167,19 @@ impl MicroCVMCpu {
 
         if current_instruction.argument_count >= 1 {
             let arg1 = self.memory[(self.pc + 1) as usize];
-            current_instruction.arg1 = Some(if arg1 < 16 {
-                OpcodeArg1::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
+            current_instruction.arg1 = Some(if arg1 < REGISTER_COUNT as u16 {
+                OpcodeArgument::Register(Register::try_from(arg1).unwrap_or(Register::Invalid))
             } else {
-                OpcodeArg1::Address(arg1)
+                OpcodeArgument::Immediate(arg1)
             });
         }
 
         if current_instruction.argument_count >= 2 {
             let arg2 = self.memory[(self.pc + 2) as usize];
-            current_instruction.arg2 = Some(if arg2 < 16 {
-                OpcodeArg2::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
+            current_instruction.arg2 = Some(if arg2 < REGISTER_COUNT as u16 {
+                OpcodeArgument::Register(Register::try_from(arg2).unwrap_or(Register::Invalid))
             } else {
-                OpcodeArg2::Address(arg2)
+                OpcodeArgument::Immediate(arg2)
             });
         }
 
@@ -194,21 +191,21 @@ impl MicroCVMCpu {
 
         match opcode.opcode_type {
             OpcodeType::Inc => {
-                if let Some(OpcodeArg1::Register(reg)) = opcode.arg1 {
+                if let Some(OpcodeArgument::Register(reg)) = opcode.arg1 {
                     self.registers[reg as usize] += 1;
                 }
             }
 
             OpcodeType::Mov => {
-                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
-                    (opcode.arg1, opcode.arg2)
+                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
+                    (opcode.arg2, opcode.arg1)
                 {
                     self.registers[dst as usize] = imm;
                 }
             }
 
             OpcodeType::Add => {
-                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
+                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
                     (opcode.arg1, opcode.arg2)
                 {
                     self.registers[dst as usize] += imm;
@@ -216,53 +213,57 @@ impl MicroCVMCpu {
             }
 
             OpcodeType::Sub => {
-                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
-                    (opcode.arg1, opcode.arg2)
+                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
+                    (opcode.arg2, opcode.arg1)
                 {
                     self.registers[dst as usize] -= imm;
                 }
             }
 
             OpcodeType::Div => {
-                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
-                    (opcode.arg1, opcode.arg2)
+                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
+                    (opcode.arg2, opcode.arg1)
                 {
                     self.registers[dst as usize] /= imm;
                 }
             }
 
             OpcodeType::Mul => {
-                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(imm))) =
-                    (opcode.arg1, opcode.arg2)
+                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
+                    (opcode.arg2, opcode.arg1)
                 {
                     self.registers[dst as usize] *= imm;
                 }
             }
 
             OpcodeType::Load => {
-                if let (Some(OpcodeArg1::Register(dst)), Some(OpcodeArg2::Address(addr))) =
-                    (opcode.arg1, opcode.arg2)
+                if let (
+                    Some(OpcodeArgument::Register(dst)),
+                    Some(OpcodeArgument::Immediate(addr)),
+                ) = (opcode.arg2, opcode.arg1)
                 {
                     self.registers[dst as usize] = self.memory[addr as usize];
                 }
             }
 
             OpcodeType::Store => {
-                if let (Some(OpcodeArg1::Address(addr)), Some(OpcodeArg2::Register(src))) =
-                    (opcode.arg1, opcode.arg2)
+                if let (
+                    Some(OpcodeArgument::Immediate(addr)),
+                    Some(OpcodeArgument::Register(src)),
+                ) = (opcode.arg2, opcode.arg1)
                 {
                     self.memory[(addr / 2) as usize] = self.registers[src as usize];
                 }
             }
 
             OpcodeType::Jmp => {
-                if let Some(OpcodeArg1::Address(target)) = opcode.arg1 {
+                if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
                     self.pc = target;
                 }
             }
 
             OpcodeType::Call => {
-                if let Some(OpcodeArg1::Address(target)) = opcode.arg1 {
+                if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
                     if target == FunctionCall::ClearScreen as u16 {
                         let _ = super::screen::DrawCommand::clear_screen(self);
                     }
@@ -306,16 +307,15 @@ impl MicroCVMCpu {
         let mut buffer = Vec::new();
         let bytes_read = file.read_to_end(&mut buffer)?;
 
-        if buffer.len() % 2 != 0 {
-            buffer.push(0x00);
-        }
-
         self.memory.clear();
-        self.memory.reserve(buffer.len() / 2);
+        self.memory.reserve(buffer.len());
 
-        for chunk in buffer.chunks_exact(2) {
-            let word = u16::from_le_bytes([chunk[0], chunk[1]]);
-            self.memory.push(word);
+        let mut iter = buffer.chunks(2);
+        while let Some(chunk) = iter.next() {
+            if chunk.len() == 2 {
+                let word = u16::from_le_bytes([chunk[0], chunk[1]]);
+                self.memory.push(word);
+            }
         }
 
         let new_len = self.memory.len();
@@ -387,22 +387,22 @@ impl TryFrom<u16> for Register {
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Register::R0),
-            1 => Ok(Register::R1),
-            2 => Ok(Register::R2),
-            3 => Ok(Register::R3),
-            4 => Ok(Register::R4),
-            5 => Ok(Register::R5),
-            6 => Ok(Register::R6),
-            7 => Ok(Register::R7),
-            8 => Ok(Register::V0),  // Red
-            9 => Ok(Register::V1),  // Green
-            10 => Ok(Register::V2), // Blue
-            11 => Ok(Register::V3), // Line thickness
-            12 => Ok(Register::V4), // Starting x coordinate
-            13 => Ok(Register::V5), // Starting y coordinate
-            14 => Ok(Register::V6), // Ending x coordinate
-            15 => Ok(Register::V7),
+            0x01 => Ok(Register::R0),
+            0x02 => Ok(Register::R1),
+            0x03 => Ok(Register::R2),
+            0x04 => Ok(Register::R3),
+            0x05 => Ok(Register::R4),
+            0x06 => Ok(Register::R5),
+            0x07 => Ok(Register::R6),
+            0x08 => Ok(Register::R7),
+            0x09 => Ok(Register::V0), // Red
+            0x0A => Ok(Register::V1), // Green
+            0x0B => Ok(Register::V2), // Blue
+            0x0C => Ok(Register::V3), // Line thickness
+            0x0D => Ok(Register::V4), // Starting x coordinate
+            0x0E => Ok(Register::V5), // Starting y coordinate
+            0x0F => Ok(Register::V6), // Ending x coordinate
+            0x10 => Ok(Register::V7),
             invalid => return Err(InvalidRegister(invalid)),
         }
     }
