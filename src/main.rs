@@ -10,7 +10,7 @@ fn main() {
     let mut vcpu = cpu::MicroCVMCpu::empty();
     //let mut vdisk = disk::MicroCVMDisk::empty();
 
-    match vcpu.read_memory_from_file("../../examples/draw_line.bin") {
+    match vcpu.read_memory_from_file("../../examples/load_bmp.bin") {
         Ok(_) => {}
         Err(e) => {
             eprintln!("error reading binary: {}", e);

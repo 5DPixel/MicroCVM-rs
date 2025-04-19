@@ -45,12 +45,12 @@ pub enum Register {
     R7 = 0x1008,
 
     // Video argument registers
-    V0 = 0x2001, // Red
+    V0 = 0x2001, // Red, BMP file path
     V1 = 0x2002, // Green
     V2 = 0x2003, // Blue
     V3 = 0x2004, // Line thickness
-    V4 = 0x2005, // Starting x coordinate
-    V5 = 0x2006, // Starting y coordinate
+    V4 = 0x2005, // Starting x coordinate, general x coordinate
+    V5 = 0x2006, // Starting y coordinate, general y coordinate
     V6 = 0x2007, // Ending x coordinate
     V7 = 0x2008, // Ending y coordinate
 
@@ -64,6 +64,7 @@ pub enum FunctionCall {
     DrawLine = 0x14,
     FillRect = 0x15,
     ClearScreen = 0x16,
+    LoadBMP = 0x17,
 }
 
 #[derive(Debug)]
@@ -298,6 +299,15 @@ impl MicroCVMCpu {
                             self, color, line_start, line_end, thickness,
                         );
                     }
+                    if target == FunctionCall::LoadBMP as u16 {
+                        let point = super::types::Point::new(
+                            self.registers[Register::index(Register::V4) as usize] as isize,
+                            self.registers[Register::index(Register::V5) as usize] as isize,
+                        );
+                        let bmp_file_path = "../../examples/rust.bmp";
+                        let bmp_bytes = std::fs::read(bmp_file_path).unwrap();
+                        let _ = super::screen::DrawCommand::draw_bmp(self, &bmp_bytes, point);
+                    }
                 }
             }
 
@@ -451,6 +461,7 @@ impl TryFrom<u16> for FunctionCall {
             0x14 => Ok(FunctionCall::DrawLine),
             0x15 => Ok(FunctionCall::FillRect),
             0x16 => Ok(FunctionCall::ClearScreen),
+            0x17 => Ok(FunctionCall::LoadBMP),
             invalid => return Err(InvalidFunctionCall(invalid)),
         }
     }
@@ -465,6 +476,7 @@ impl TryFrom<&str> for FunctionCall {
             "draw_line" => Ok(FunctionCall::DrawLine),
             "fill_screen" => Ok(FunctionCall::FillRect),
             "clear_screen" => Ok(FunctionCall::ClearScreen),
+            "load_bmp" => Ok(FunctionCall::LoadBMP),
             invalid => Err(InvalidFunctionCallString(invalid.to_string())),
         }
     }

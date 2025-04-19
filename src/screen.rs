@@ -75,4 +75,53 @@ impl DrawCommand {
             }
         }
     }
+
+    pub fn draw_bmp(
+        cpu: &mut super::cpu::MicroCVMCpu,
+        bmp_data: &[u8],
+        position: super::types::Point,
+    ) {
+        use super::types::{Color, Point};
+
+        let data_offset =
+            u32::from_le_bytes([bmp_data[10], bmp_data[11], bmp_data[12], bmp_data[13]]) as usize;
+        let width =
+            u32::from_le_bytes([bmp_data[18], bmp_data[19], bmp_data[20], bmp_data[21]]) as usize;
+        let height =
+            u32::from_le_bytes([bmp_data[22], bmp_data[23], bmp_data[24], bmp_data[25]]) as usize;
+        let bits_per_pixel = u16::from_le_bytes([bmp_data[28], bmp_data[29]]);
+
+        if bits_per_pixel != 24 {
+            panic!("Only 24-bit BMP files are supported.");
+        }
+
+        let pitch = ((width * 3 + 3) / 4) * 4;
+        let screen_width = cpu.framebuffer_width / 2;
+        let screen_height = cpu.framebuffer_height / 2;
+
+        for y in 0..height {
+            for x in 0..width {
+                let bmp_y = height - 1 - y;
+                let index = data_offset + bmp_y * pitch + x * 3;
+                let b = bmp_data[index];
+                let g = bmp_data[index + 1];
+                let r = bmp_data[index + 2];
+
+                let screen_x = position.x + x as isize;
+                let screen_y = position.y + y as isize;
+
+                if screen_x >= 0
+                    && screen_x < screen_width as isize
+                    && screen_y >= 0
+                    && screen_y < screen_height as isize
+                {
+                    let screen_index = DrawCommand::get_index_from_coordinate(
+                        Point::new(screen_x, screen_y),
+                        screen_width as isize,
+                    );
+                    cpu.video_memory[screen_index as usize] = Color::new(r, g, b);
+                }
+            }
+        }
+    }
 }
