@@ -1,7 +1,7 @@
 mov 255, v0 ; Set R to 255
 mov 0, v1 ; Set G to 0
 mov 0, v2 ; Set B to 0
-call fill_rect
+call fill_screen
 mov 255, v0 ; Set R to 255
 mov 0, v1 ; Set G to 0
 mov 255, v2 ; Set B to 255

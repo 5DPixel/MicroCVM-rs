@@ -5,12 +5,14 @@ use std::io::{self, Read};
 const FREE_MEMORY: usize = 2048 * 1024;
 const VIDEO_MEMORY: usize = 1728 * 1024;
 const REGISTER_COUNT: usize = 18;
+pub const FLAG_ZERO: u16 = 0x0001;
 
 pub struct MicroCVMCpu {
     pub memory: Vec<u16>,
     pub video_memory: Vec<super::types::Color>,
     pub registers: [u16; REGISTER_COUNT],
     pub pc: u16,
+    pub flags: u16,
     pub framebuffer_width: usize,
     pub framebuffer_height: usize,
 }
@@ -30,6 +32,9 @@ pub enum OpcodeType {
     Mul = 0x09,
     Nop = 0x90,
     Call = 0x0A,
+    Je = 0x0B,
+    Jne = 0x0C,
+    Cmp = 0x0D,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,6 +145,7 @@ impl MicroCVMCpu {
             video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
             registers: [0; REGISTER_COUNT],
             pc: 0,
+            flags: 0,
             framebuffer_width: 768,
             framebuffer_height: 576,
         }
@@ -148,11 +154,15 @@ impl MicroCVMCpu {
         match opcode_type {
             OpcodeType::Inc => 1,
             OpcodeType::Mov => 2,
+            OpcodeType::Jmp => 1,
             OpcodeType::Add => 2,
             OpcodeType::Sub => 2,
             OpcodeType::Div => 2,
             OpcodeType::Mul => 2,
             OpcodeType::Call => 1,
+            OpcodeType::Je => 1,
+            OpcodeType::Jne => 1,
+            OpcodeType::Cmp => 2,
             _ => 0,
         }
     }
@@ -209,7 +219,7 @@ impl MicroCVMCpu {
 
             OpcodeType::Add => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg1, opcode.arg2)
+                    (opcode.arg2, opcode.arg1)
                 {
                     self.registers[Register::index(dst) as usize] += imm;
                 }
@@ -263,6 +273,32 @@ impl MicroCVMCpu {
             OpcodeType::Jmp => {
                 if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
                     self.pc = target;
+                }
+            }
+
+            OpcodeType::Cmp => {
+                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
+                    (opcode.arg2, opcode.arg1)
+                {
+                    let reg_value = self.registers[Register::index(dst)];
+                    let is_equal = reg_value == imm;
+                    self.set_flag(FLAG_ZERO, is_equal);
+                }
+            }
+
+            OpcodeType::Je => {
+                if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
+                    if self.get_flag(FLAG_ZERO) == true {
+                        self.pc = target;
+                    }
+                }
+            }
+
+            OpcodeType::Jne => {
+                if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
+                    if self.get_flag(FLAG_ZERO) == false {
+                        self.pc = target;
+                    }
                 }
             }
 
@@ -340,6 +376,18 @@ impl MicroCVMCpu {
 
         Ok(bytes_read)
     }
+
+    pub fn set_flag(&mut self, flag: u16, value: bool) {
+        if value {
+            self.flags |= flag;
+        } else {
+            self.flags &= !flag;
+        }
+    }
+
+    pub fn get_flag(&self, flag: u16) -> bool {
+        self.flags & flag != 0
+    }
 }
 
 impl Opcode {
@@ -370,6 +418,9 @@ impl TryFrom<u16> for OpcodeType {
             0xFF => Ok(OpcodeType::Hlt),
             0x90 => Ok(OpcodeType::Nop),
             0x0A => Ok(OpcodeType::Call),
+            0x0B => Ok(OpcodeType::Je),
+            0x0C => Ok(OpcodeType::Jne),
+            0x0D => Ok(OpcodeType::Cmp),
             invalid => return Err(InvalidOpcode(invalid)),
         }
     }
@@ -392,6 +443,9 @@ impl TryFrom<&str> for OpcodeType {
             "mul" => Ok(OpcodeType::Mul),
             "nop" => Ok(OpcodeType::Nop),
             "call" => Ok(OpcodeType::Call),
+            "je" => Ok(OpcodeType::Je),
+            "jne" => Ok(OpcodeType::Jne),
+            "cmp" => Ok(OpcodeType::Cmp),
             invalid => return Err(InvalidOpcodeString(invalid.to_string())),
         }
     }
