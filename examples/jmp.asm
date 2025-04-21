@@ -1,4 +1,4 @@
-add 2, r0
-cmp 8, r0
+add r0, 2
+cmp r0, 64
 jne 0
 hlt

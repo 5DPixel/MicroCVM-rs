@@ -73,9 +73,9 @@ There are also 8 video-argument registers: `v0` through `v7`.
 | Assembly        | Machine Code (Hex) | Description                     |
 |-----------------|--------------------|---------------------------------|
 | `inc r0`        | `0x00 0x10 0x01 0x00`| Increment register r0           |
-| `mov 10, r1`    | `0x01 0x0A 0x10 0x02`| Move 10 into register r1        |
-| `add 5, r2`     | `0x02 0x05 0x10 0x03`| Add 5 to register r2            |
-| `sub 1, r3`     | `0x03 0x01 0x10 0x04`| Subtract 1 from register r3     |
+| `mov r1, 10`    | `0x01 0x0A 0x02 0x00 0x10 0x00`| Move 10 into register r1        |
+| `add r2, 5`     | `0x02 0x10 0x03 0x05`| Add 5 to register r2            |
+| `sub r3, 1`     | `0x03 0x10 0x04 0x01`| Subtract 1 from register r3     |
 | `hlt`           | `0xFF 0x00`          | Stop execution                  |
 
 ---

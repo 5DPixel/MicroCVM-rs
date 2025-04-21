@@ -7,6 +7,7 @@ const VIDEO_MEMORY: usize = 1728 * 1024;
 const REGISTER_COUNT: usize = 18;
 pub const FLAG_ZERO: u16 = 0x0001;
 
+#[derive(Default, Clone)]
 pub struct MicroCVMCpu {
     pub memory: Vec<u16>,
     pub video_memory: Vec<super::types::Color>,
@@ -58,6 +59,8 @@ pub enum Register {
     V5 = 0x2006, // Starting y coordinate, general y coordinate
     V6 = 0x2007, // Ending x coordinate
     V7 = 0x2008, // Ending y coordinate
+    //Keycode
+    K0 = 0x3001,
 
     Invalid = 0xFFFF,
 }
@@ -211,7 +214,7 @@ impl MicroCVMCpu {
 
             OpcodeType::Mov => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg2, opcode.arg1)
+                    (opcode.arg1, opcode.arg2)
                 {
                     self.registers[Register::index(dst) as usize] = imm;
                 }
@@ -219,7 +222,7 @@ impl MicroCVMCpu {
 
             OpcodeType::Add => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg2, opcode.arg1)
+                    (opcode.arg1, opcode.arg2)
                 {
                     self.registers[Register::index(dst) as usize] += imm;
                 }
@@ -227,7 +230,7 @@ impl MicroCVMCpu {
 
             OpcodeType::Sub => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg2, opcode.arg1)
+                    (opcode.arg1, opcode.arg2)
                 {
                     self.registers[Register::index(dst) as usize] -= imm;
                 }
@@ -235,7 +238,7 @@ impl MicroCVMCpu {
 
             OpcodeType::Div => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg2, opcode.arg1)
+                    (opcode.arg1, opcode.arg2)
                 {
                     self.registers[Register::index(dst) as usize] /= imm;
                 }
@@ -243,7 +246,7 @@ impl MicroCVMCpu {
 
             OpcodeType::Mul => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg2, opcode.arg1)
+                    (opcode.arg1, opcode.arg2)
                 {
                     self.registers[Register::index(dst) as usize] *= imm;
                 }
@@ -253,7 +256,7 @@ impl MicroCVMCpu {
                 if let (
                     Some(OpcodeArgument::Register(dst)),
                     Some(OpcodeArgument::Immediate(addr)),
-                ) = (opcode.arg2, opcode.arg1)
+                ) = (opcode.arg1, opcode.arg2)
                 {
                     self.registers[Register::index(dst) as usize] = self.memory[addr as usize];
                 }
@@ -263,7 +266,7 @@ impl MicroCVMCpu {
                 if let (
                     Some(OpcodeArgument::Immediate(addr)),
                     Some(OpcodeArgument::Register(src)),
-                ) = (opcode.arg2, opcode.arg1)
+                ) = (opcode.arg1, opcode.arg2)
                 {
                     self.memory[(addr / 2) as usize] =
                         self.registers[Register::index(src) as usize];
@@ -273,12 +276,13 @@ impl MicroCVMCpu {
             OpcodeType::Jmp => {
                 if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
                     self.pc = target;
+                    println!("Jumping to address: {}", self.pc);
                 }
             }
 
             OpcodeType::Cmp => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg2, opcode.arg1)
+                    (opcode.arg1, opcode.arg2)
                 {
                     let reg_value = self.registers[Register::index(dst)];
                     let is_equal = reg_value == imm;
@@ -473,6 +477,8 @@ impl TryFrom<u16> for Register {
             0x2006 => Ok(Register::V5), // Starting y coordinate
             0x2007 => Ok(Register::V6), // Ending x coordinate
             0x2008 => Ok(Register::V7), // Ending y coordinate
+            //Keycodes
+            0x3001 => Ok(Register::K0),
 
             _ => Err(InvalidRegister(value)),
         }
@@ -501,6 +507,8 @@ impl TryFrom<&str> for Register {
             "v5" => Ok(Register::V5),
             "v6" => Ok(Register::V6),
             "v7" => Ok(Register::V7),
+            //Keycodes
+            "k0" => Ok(Register::K0),
             invalid => Err(InvalidRegisterString(invalid.to_string())),
         }
     }
@@ -556,6 +564,8 @@ impl Register {
             Register::V5 => 13,
             Register::V6 => 14,
             Register::V7 => 15,
+            //Keycodes
+            Register::K0 => 16,
             Register::Invalid => 255,
         }
     }

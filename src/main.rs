@@ -4,48 +4,53 @@ mod render;
 mod screen;
 mod types;
 
-use cpu::{FLAG_ZERO, Register};
+use cpu::Register;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
-    let mut vcpu = cpu::MicroCVMCpu::empty();
-    //let mut vdisk = disk::MicroCVMDisk::empty();
+    let vcpu = Arc::new(Mutex::new(cpu::MicroCVMCpu::empty()));
 
-    match vcpu.read_memory_from_file("../../examples/jmp.bin") {
-        Ok(_) => {}
-        Err(e) => {
+    {
+        let mut vcpu_locked = vcpu.lock().unwrap();
+        if let Err(e) = vcpu_locked.read_memory_from_file("../../examples/key_press.bin") {
             eprintln!("error reading binary: {}", e);
         }
     }
 
-    loop {
-        let current_pc = vcpu.pc;
-        let opcode_word = vcpu.memory[vcpu.pc as usize];
+    let vcpu_for_cpu_thread = Arc::clone(&vcpu);
+    thread::spawn(move || {
+        loop {
+            let mut vcpu = vcpu_for_cpu_thread.lock().unwrap();
+            let current_pc = vcpu.pc;
+            let opcode_word = vcpu.memory[vcpu.pc as usize];
 
-        if opcode_word == cpu::OpcodeType::Hlt as u16 {
-            break;
+            if opcode_word == cpu::OpcodeType::Hlt as u16 {
+                break;
+            }
+
+            let opcode_length = vcpu.execute_instruction();
+
+            if vcpu.pc == current_pc {
+                vcpu.pc += opcode_length;
+            }
         }
 
-        let opcode_length = vcpu.execute_instruction();
+        println!("Memory execution finished.");
+    });
 
-        if vcpu.pc == current_pc {
-            vcpu.pc += opcode_length;
-        }
-    }
-
-    println!(
-        "Finished, r0 value: {}",
-        vcpu.registers[Register::index(Register::R0)]
-    );
+    let (framebuffer_width, framebuffer_height) = {
+        let vcpu_locked = vcpu.lock().unwrap();
+        (
+            vcpu_locked.framebuffer_width,
+            vcpu_locked.framebuffer_height,
+        )
+    };
 
     let event_loop = EventLoop::new().unwrap();
-
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = render::App::new(
-        vcpu.framebuffer_width as u32,
-        vcpu.framebuffer_height as u32,
-        vcpu.video_memory,
-    );
+    let mut app = render::App::new(framebuffer_width as u32, framebuffer_height as u32, vcpu);
     let _ = event_loop.run_app(&mut app);
 }
