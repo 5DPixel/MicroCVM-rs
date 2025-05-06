@@ -2,9 +2,12 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{self, Read};
 
-const FREE_MEMORY: usize = 2048 * 1024;
-const VIDEO_MEMORY: usize = 1728 * 1024;
-const REGISTER_COUNT: usize = 18;
+use crate::screen::DrawCommand;
+use crate::types::{Color, Point};
+
+const FREE_MEMORY: usize = 2048 * 1024; //2MiB
+const VIDEO_MEMORY: usize = 1728 * 1024; //1.6875MiB
+const REGISTER_COUNT: usize = 25;
 pub const FLAG_ZERO: u16 = 0x0001;
 
 #[derive(Default, Clone)]
@@ -51,14 +54,22 @@ pub enum Register {
     R7 = 0x1008,
 
     // Video argument registers
-    V0 = 0x2001, // Red, BMP file path
-    V1 = 0x2002, // Green
-    V2 = 0x2003, // Blue
-    V3 = 0x2004, // Line thickness
-    V4 = 0x2005, // Starting x coordinate, general x coordinate
-    V5 = 0x2006, // Starting y coordinate, general y coordinate
-    V6 = 0x2007, // Ending x coordinate
-    V7 = 0x2008, // Ending y coordinate
+    V0 = 0x2001,  // Red, BMP file path
+    V1 = 0x2002,  // Green
+    V2 = 0x2003,  // Blue
+    V3 = 0x2004,  // Line thickness, Character to draw in ASCII
+    V4 = 0x2005,  // Starting x coordinate, Rectangle centre x, Character x
+    V5 = 0x2006,  // Starting y coordinate, Rectangle centre y, Character y
+    V6 = 0x2007,  // Ending x coordinate, Rectangle size
+    V7 = 0x2008,  // Ending y coordinate
+    V8 = 0x2009,  // Quadrilateral point 1 x,
+    V9 = 0x200A,  //Quadrilateral point 1 y,
+    V10 = 0x200B, //Quadrilateral point 2 x,
+    V11 = 0x200C, //Quadrilateral point 2 y,
+    V12 = 0x200D, //Quadrilteral point 3 x,
+    V13 = 0x200E, //Quadrilateral point 3 y,
+    V14 = 0x200F, //Quadrilateral point 4 x,
+    V15 = 0x2010, //Quadrilateral point 4 y
     //Keycode
     K0 = 0x3001,
 
@@ -70,9 +81,12 @@ pub enum Register {
 pub enum FunctionCall {
     SetPixel = 0x13,
     DrawLine = 0x14,
-    FillRect = 0x15,
+    FillScreen = 0x15,
     ClearScreen = 0x16,
     LoadBMP = 0x17,
+    FillRect = 0x18,
+    FillQuad = 0x19,
+    DrawCharacter = 0x1A,
 }
 
 #[derive(Debug)]
@@ -311,7 +325,7 @@ impl MicroCVMCpu {
                     if target == FunctionCall::ClearScreen as u16 {
                         let _ = super::screen::DrawCommand::clear_screen(self);
                     }
-                    if target == FunctionCall::FillRect as u16 {
+                    if target == FunctionCall::FillScreen as u16 {
                         let color = super::types::Color::new(
                             self.registers[Register::index(Register::V0) as usize] as u8,
                             self.registers[Register::index(Register::V1) as usize] as u8,
@@ -344,9 +358,59 @@ impl MicroCVMCpu {
                             self.registers[Register::index(Register::V4) as usize] as isize,
                             self.registers[Register::index(Register::V5) as usize] as isize,
                         );
-                        let bmp_file_path = "../../examples/rust.bmp";
+                        let bmp_file_path = "../../examples/bg.bmp";
                         let bmp_bytes = std::fs::read(bmp_file_path).unwrap();
                         let _ = super::screen::DrawCommand::draw_bmp(self, &bmp_bytes, point);
+                    }
+                    if target == FunctionCall::FillRect as u16 {
+                        let color = Color::new(
+                            self.registers[Register::index(Register::V0) as usize] as u8,
+                            self.registers[Register::index(Register::V1) as usize] as u8,
+                            self.registers[Register::index(Register::V2) as usize] as u8,
+                        );
+                        let center = Point::new(
+                            self.registers[Register::index(Register::V4) as usize] as isize,
+                            self.registers[Register::index(Register::V5) as usize] as isize,
+                        );
+                        let size = self.registers[Register::index(Register::V6) as usize] as isize;
+                        let _ = DrawCommand::fill_rect(self, color, center, size);
+                    }
+                    if target == FunctionCall::FillQuad as u16 {
+                        let color = Color::new(
+                            self.registers[Register::index(Register::V0) as usize] as u8,
+                            self.registers[Register::index(Register::V1) as usize] as u8,
+                            self.registers[Register::index(Register::V2) as usize] as u8,
+                        );
+                        let p1 = Point::new(
+                            self.registers[Register::index(Register::V8) as usize] as isize,
+                            self.registers[Register::index(Register::V9) as usize] as isize,
+                        );
+                        let p2 = Point::new(
+                            self.registers[Register::index(Register::V10) as usize] as isize,
+                            self.registers[Register::index(Register::V11) as usize] as isize,
+                        );
+                        let p3 = Point::new(
+                            self.registers[Register::index(Register::V12) as usize] as isize,
+                            self.registers[Register::index(Register::V13) as usize] as isize,
+                        );
+                        let p4 = Point::new(
+                            self.registers[Register::index(Register::V14) as usize] as isize,
+                            self.registers[Register::index(Register::V15) as usize] as isize,
+                        );
+                        let _ = DrawCommand::fill_quad(self, color, p1, p2, p3, p4);
+                    }
+                    if target == FunctionCall::DrawCharacter as u16 {
+                        let character = self.registers[Register::index(Register::V3) as usize] as u8 as char;
+                        let character_position = Point::new(
+                            self.registers[Register::index(Register::V4) as usize] as isize,
+                            self.registers[Register::index(Register::V5) as usize] as isize,
+                        );
+                        let character_color = Color::new(
+                            self.registers[Register::index(Register::V0) as usize] as u8,
+                            self.registers[Register::index(Register::V1) as usize] as u8,
+                            self.registers[Register::index(Register::V2) as usize] as u8,
+                        );
+                        let _ = DrawCommand::draw_character(self, character, character_position, character_color);
                     }
                 }
             }
@@ -358,28 +422,21 @@ impl MicroCVMCpu {
     }
 
     pub fn read_memory_from_file(&mut self, file_path: &str) -> io::Result<usize> {
-        let mut file = File::open(file_path)?;
-        let mut buffer = Vec::new();
-        let bytes_read = file.read_to_end(&mut buffer)?;
+        let buffer = std::fs::read(file_path)?;
+        let word_count = buffer.len() / 2;
 
-        self.memory.clear();
-        self.memory.reserve(buffer.len());
-
-        let mut iter = buffer.chunks(2);
-        while let Some(chunk) = iter.next() {
-            if chunk.len() == 2 {
-                let word = u16::from_le_bytes([chunk[0], chunk[1]]);
-                self.memory.push(word);
-            }
+        for (i, chunk) in buffer.chunks_exact(2).enumerate() {
+            self.memory[i] = u16::from_le_bytes([chunk[0], chunk[1]]);
         }
 
-        let new_len = self.memory.len();
-        if new_len < FREE_MEMORY {
-            self.memory.extend(vec![0u16; FREE_MEMORY - new_len]);
+        for i in word_count..self.memory.len() {
+            self.memory[i] = 0;
         }
 
-        Ok(bytes_read)
+        Ok(buffer.len())
     }
+
+
 
     pub fn set_flag(&mut self, flag: u16, value: bool) {
         if value {
@@ -477,6 +534,14 @@ impl TryFrom<u16> for Register {
             0x2006 => Ok(Register::V5), // Starting y coordinate
             0x2007 => Ok(Register::V6), // Ending x coordinate
             0x2008 => Ok(Register::V7), // Ending y coordinate
+            0x2009 => Ok(Register::V8),
+            0x200A => Ok(Register::V9),
+            0x200B => Ok(Register::V10),
+            0x200C => Ok(Register::V11),
+            0x200D => Ok(Register::V12),
+            0x200E => Ok(Register::V13),
+            0x200F => Ok(Register::V14),
+            0x2010 => Ok(Register::V15),
             //Keycodes
             0x3001 => Ok(Register::K0),
 
@@ -507,6 +572,14 @@ impl TryFrom<&str> for Register {
             "v5" => Ok(Register::V5),
             "v6" => Ok(Register::V6),
             "v7" => Ok(Register::V7),
+            "v8" => Ok(Register::V8),
+            "v9" => Ok(Register::V9),
+            "v10" => Ok(Register::V10),
+            "v11" => Ok(Register::V11),
+            "v12" => Ok(Register::V12),
+            "v13" => Ok(Register::V13),
+            "v14" => Ok(Register::V14),
+            "v15" => Ok(Register::V15),
             //Keycodes
             "k0" => Ok(Register::K0),
             invalid => Err(InvalidRegisterString(invalid.to_string())),
@@ -521,9 +594,12 @@ impl TryFrom<u16> for FunctionCall {
         match value {
             0x13 => Ok(FunctionCall::SetPixel),
             0x14 => Ok(FunctionCall::DrawLine),
-            0x15 => Ok(FunctionCall::FillRect),
+            0x15 => Ok(FunctionCall::FillScreen),
             0x16 => Ok(FunctionCall::ClearScreen),
             0x17 => Ok(FunctionCall::LoadBMP),
+            0x18 => Ok(FunctionCall::FillRect),
+            0x19 => Ok(FunctionCall::FillQuad),
+            0x1A => Ok(FunctionCall::DrawCharacter),
             invalid => return Err(InvalidFunctionCall(invalid)),
         }
     }
@@ -536,9 +612,11 @@ impl TryFrom<&str> for FunctionCall {
         match value {
             "set_pixel" => Ok(FunctionCall::SetPixel),
             "draw_line" => Ok(FunctionCall::DrawLine),
-            "fill_screen" => Ok(FunctionCall::FillRect),
+            "fill_screen" => Ok(FunctionCall::FillScreen),
             "clear_screen" => Ok(FunctionCall::ClearScreen),
             "load_bmp" => Ok(FunctionCall::LoadBMP),
+            "fill_quad" => Ok(FunctionCall::FillQuad),
+            "draw_character" => Ok(FunctionCall::DrawCharacter),
             invalid => Err(InvalidFunctionCallString(invalid.to_string())),
         }
     }
@@ -564,6 +642,14 @@ impl Register {
             Register::V5 => 13,
             Register::V6 => 14,
             Register::V7 => 15,
+            Register::V8 => 17,
+            Register::V9 => 18,
+            Register::V10 => 19,
+            Register::V11 => 20,
+            Register::V12 => 21,
+            Register::V13 => 22,
+            Register::V14 => 23,
+            Register::V15 => 24,
             //Keycodes
             Register::K0 => 16,
             Register::Invalid => 255,

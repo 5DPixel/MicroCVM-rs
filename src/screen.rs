@@ -1,3 +1,4 @@
+use rusttype::{Font, Scale};
 pub struct DrawCommand();
 
 impl DrawCommand {
@@ -123,5 +124,128 @@ impl DrawCommand {
                 }
             }
         }
+    }
+
+    pub fn fill_rect(
+        cpu: &mut super::cpu::MicroCVMCpu,
+        color: super::types::Color,
+        center: super::types::Point,
+        size: isize,
+    ) {
+        let width = cpu.framebuffer_width / 2;
+        let height = cpu.framebuffer_height / 2;
+
+        let top_left_x = center.x - size / 2;
+        let top_left_y = center.y - size / 2;
+
+        for y in top_left_y..top_left_y + size {
+            for x in top_left_x..top_left_x + size {
+                if x >= 0 && x < width as isize && y >= 0 && y < height as isize {
+                    let index = Self::get_index_from_coordinate(
+                        super::types::Point::new(x, y),
+                        width as isize,
+                    );
+                    cpu.video_memory[index as usize] = color;
+                }
+            }
+        }
+    }
+
+    pub fn fill_quad(
+        cpu: &mut super::cpu::MicroCVMCpu,
+        color: super::types::Color,
+        p1: super::types::Point,
+        p2: super::types::Point,
+        p3: super::types::Point,
+        p4: super::types::Point,
+    ) {
+        Self::fill_triangle(cpu, color, p1, p2, p3);
+        Self::fill_triangle(cpu, color, p1, p3, p4);
+    }
+
+    pub fn fill_triangle(
+        cpu: &mut super::cpu::MicroCVMCpu,
+        color: super::types::Color,
+        p1: super::types::Point,
+        p2: super::types::Point,
+        p3: super::types::Point,
+    ) {
+        let min_x = p1.x.min(p2.x).min(p3.x);
+        let max_x = p1.x.max(p2.x).max(p3.x);
+        let min_y = p1.y.min(p2.y).min(p3.y);
+        let max_y = p1.y.max(p2.y).max(p3.y);
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let point = super::types::Point::new(x, y);
+
+                if Self::point_in_triangle(point, p1, p2, p3) {
+                    let index =
+                        Self::get_index_from_coordinate(point, cpu.framebuffer_width as isize);
+                    if index >= 0 && index < cpu.video_memory.len() as isize {
+                        cpu.video_memory[index as usize] = color;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn point_in_triangle(
+        point: super::types::Point,
+        p1: super::types::Point,
+        p2: super::types::Point,
+        p3: super::types::Point,
+    ) -> bool {
+        let det_t = (p2.y - p3.y) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.y - p3.y);
+        let alpha = ((p2.y - p3.y) * (point.x - p3.x) + (p3.x - p2.x) * (point.y - p3.y)) as f32
+            / det_t as f32;
+        let beta = ((p3.y - p1.y) * (point.x - p3.x) + (p1.x - p3.x) * (point.y - p3.y)) as f32
+            / det_t as f32;
+        let gamma = 1.0 - alpha - beta;
+
+        alpha >= 0.0 && beta >= 0.0 && gamma >= 0.0
+    }
+
+    pub fn draw_character(
+        cpu: &mut super::cpu::MicroCVMCpu,
+        character: char,
+        character_position: super::types::Point,
+        color: super::types::Color,
+    ) {
+        let font_data = std::fs::read("../../resources/terminal.ttf").unwrap();
+        let font = Font::try_from_vec(font_data).unwrap();
+
+        let scale = Scale::uniform(50.0);
+        let glyph = font
+            .glyph(character)
+            .scaled(scale)
+            .positioned(rusttype::point(0.0, 0.0));
+
+        let bounds = glyph.pixel_bounding_box().unwrap();
+
+        glyph.draw(|x, y, v| {
+            let screen_x = character_position.x + x as isize + bounds.min.x as isize;
+            let screen_y = character_position.y + y as isize + bounds.min.y as isize;
+
+            let screen_width = cpu.framebuffer_width / 2;
+            let screen_height = cpu.framebuffer_height / 2;
+
+            if screen_x >= 0
+                && screen_y >= 0
+                && screen_x < screen_width as isize
+                && screen_y < screen_height as isize
+            {
+                let index = DrawCommand::get_index_from_coordinate(
+                    super::types::Point::new(screen_x, screen_y),
+                    screen_width as isize,
+                );
+
+                cpu.video_memory[index as usize] = super::types::Color::new(
+                    (color.r as f32 * v) as u8,
+                    (color.g as f32 * v) as u8,
+                    (color.b as f32 * v) as u8,
+                );
+            }
+        });
     }
 }

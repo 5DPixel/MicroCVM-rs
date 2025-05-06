@@ -1,3 +1,5 @@
+//#![windows_subsystem = "windows"]
+
 mod cpu;
 mod disk;
 mod render;
@@ -5,8 +7,10 @@ mod screen;
 mod types;
 
 use cpu::Register;
+use screen::DrawCommand;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use types::{Color, Point};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
@@ -14,7 +18,7 @@ fn main() {
 
     {
         let mut vcpu_locked = vcpu.lock().unwrap();
-        if let Err(e) = vcpu_locked.read_memory_from_file("../../examples/key_press.bin") {
+        if let Err(e) = vcpu_locked.read_memory_from_file("../../examples/glyphs.bin") {
             eprintln!("error reading binary: {}", e);
         }
     }
