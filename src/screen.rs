@@ -212,7 +212,7 @@ impl DrawCommand {
         character_position: super::types::Point,
         color: super::types::Color,
     ) {
-        let font_data = std::fs::read("../../resources/terminal.ttf").unwrap();
+        let font_data = std::fs::read("resources/terminal.ttf").unwrap();
         let font = Font::try_from_vec(font_data).unwrap();
 
         let scale = Scale::uniform(50.0);

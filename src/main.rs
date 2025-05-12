@@ -18,7 +18,7 @@ fn main() {
 
     {
         let mut vcpu_locked = vcpu.lock().unwrap();
-        if let Err(e) = vcpu_locked.read_memory_from_file("../../examples/glyphs.bin") {
+        if let Err(e) = vcpu_locked.read_memory_from_file("examples/glyphs.bin") {
             eprintln!("error reading binary: {}", e);
         }
     }
