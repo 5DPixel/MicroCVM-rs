@@ -26,6 +26,7 @@ fn physical_key_to_keycode(key: &PhysicalKey) -> u16 {
             winit::keyboard::KeyCode::Enter => 0x0D,
             winit::keyboard::KeyCode::ArrowUp => 0x80,
             winit::keyboard::KeyCode::ArrowDown => 0x81,
+            winit::keyboard::KeyCode::Space => 0x20,
             _ => 0x00,
         },
         _ => 0x00,
@@ -56,7 +57,6 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
@@ -70,7 +70,7 @@ impl ApplicationHandler for App {
                     cpu.registers[cpu::Register::index(cpu::Register::K0) as usize] =
                         physical_key_to_keycode(&physical_key);
                 } else {
-                    cpu.registers[cpu::Register::index(cpu::Register::K0) as usize] = 0;
+                    cpu.registers[cpu::Register::index(cpu::Register::K0) as usize] = 0x5F;
                 }
             }
             _ => (),

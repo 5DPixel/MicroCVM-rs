@@ -1,11 +1,26 @@
 use std::fmt::Display;
-use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 
 use crate::screen::DrawCommand;
 use crate::types::{Color, Point};
 
-const FREE_MEMORY: usize = 2048 * 1024; //2MiB
+const MEM_TOTAL: usize = 2048 * 1024; //2MiB
+
+const KERNEL_OFFSET: usize = 0x0000;
+const KERNEL_SIZE: usize = 0x1000;
+
+const CODE_OFFSET: usize = KERNEL_OFFSET + KERNEL_SIZE;
+const CODE_SIZE: usize = 0x20000;
+
+const DATA_OFFSET: usize = CODE_OFFSET + CODE_SIZE;
+const DATA_SIZE: usize = 0x10000;
+
+const STACK_OFFSET: usize = DATA_OFFSET + DATA_SIZE;
+const STACK_SIZE: usize = 0x8000;
+
+const HEAP_OFFSET: usize = STACK_OFFSET + STACK_SIZE;
+const HEAP_SIZE: usize = MEM_TOTAL - HEAP_OFFSET;
+
 const VIDEO_MEMORY: usize = 1728 * 1024; //1.6875MiB
 const REGISTER_COUNT: usize = 25;
 pub const FLAG_ZERO: u16 = 0x0001;
@@ -39,6 +54,12 @@ pub enum OpcodeType {
     Je = 0x0B,
     Jne = 0x0C,
     Cmp = 0x0D,
+    And = 0x0E,
+    Or = 0x0F,
+    Xor = 0x10,
+    Not = 0x11,
+    Shl = 0x12,
+    Shr = 0x13,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,8 +93,6 @@ pub enum Register {
     V15 = 0x2010, //Quadrilateral point 4 y
     //Keycode
     K0 = 0x3001,
-
-    Invalid = 0xFFFF,
 }
 
 #[repr(u8)]
@@ -158,7 +177,7 @@ pub enum OpcodeArgument {
 impl MicroCVMCpu {
     pub fn empty() -> Self {
         Self {
-            memory: vec![0; FREE_MEMORY / 2],
+            memory: vec![0; MEM_TOTAL / 2],
             video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
             registers: [0; REGISTER_COUNT],
             pc: 0,
@@ -169,6 +188,7 @@ impl MicroCVMCpu {
     }
     pub fn get_opcode_argument_count(opcode_type: OpcodeType) -> u8 {
         match opcode_type {
+            OpcodeType::Load => 2,
             OpcodeType::Inc => 1,
             OpcodeType::Mov => 2,
             OpcodeType::Jmp => 1,
@@ -180,6 +200,12 @@ impl MicroCVMCpu {
             OpcodeType::Je => 1,
             OpcodeType::Jne => 1,
             OpcodeType::Cmp => 2,
+            OpcodeType::And => 2,
+            OpcodeType::Or => 2,
+            OpcodeType::Xor => 2,
+            OpcodeType::Not => 1,
+            OpcodeType::Shl => 2,
+            OpcodeType::Shr => 2,
             _ => 0,
         }
     }
@@ -227,20 +253,43 @@ impl MicroCVMCpu {
             }
 
             OpcodeType::Mov => {
-                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg1, opcode.arg2)
-                {
-                    self.registers[Register::index(dst) as usize] = imm;
+                if let Some(OpcodeArgument::Register(dst)) = opcode.arg1 {
+                    let dst_index = Register::index(dst) as usize;
+
+                    match opcode.arg2 {
+                        Some(OpcodeArgument::Immediate(imm)) => {
+                            self.registers[dst_index] = imm;
+                        }
+                        Some(OpcodeArgument::Register(src)) => {
+                            let src_index = Register::index(src) as usize;
+                            self.registers[dst_index] = self.registers[src_index];
+                        }
+                        _ => {
+
+                        }
+                    }
                 }
             }
 
             OpcodeType::Add => {
-                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg1, opcode.arg2)
-                {
-                    self.registers[Register::index(dst) as usize] += imm;
+                if let Some(OpcodeArgument::Register(dst)) = opcode.arg1 {
+                    let dst_index = Register::index(dst) as usize;
+
+                    match opcode.arg2 {
+                        Some(OpcodeArgument::Immediate(imm)) => {
+                            self.registers[dst_index] += imm;
+                        }
+                        Some(OpcodeArgument::Register(src)) => {
+                            let src_index = Register::index(src) as usize;
+                            self.registers[dst_index] += self.registers[src_index];
+                        }
+                        _ => {
+
+                        }
+                    }
                 }
             }
+
 
             OpcodeType::Sub => {
                 if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
@@ -267,12 +316,22 @@ impl MicroCVMCpu {
             }
 
             OpcodeType::Load => {
-                if let (
-                    Some(OpcodeArgument::Register(dst)),
-                    Some(OpcodeArgument::Immediate(addr)),
-                ) = (opcode.arg1, opcode.arg2)
-                {
-                    self.registers[Register::index(dst) as usize] = self.memory[addr as usize];
+                if let Some(OpcodeArgument::Register(dst)) = opcode.arg1 {
+                    let dst_index = Register::index(dst) as usize;
+
+                    match opcode.arg2 {
+                        Some(OpcodeArgument::Immediate(imm)) => {
+                            self.registers[dst_index] = self.memory[imm as usize];
+                        }
+                        Some(OpcodeArgument::Register(src)) => {
+                            let src_index = Register::index(src) as usize;
+                            let addr = self.registers[src_index] as usize;
+                            self.registers[dst_index] = self.memory[addr];
+                        }
+                        _ => {
+
+                        }
+                    }
                 }
             }
 
@@ -290,7 +349,6 @@ impl MicroCVMCpu {
             OpcodeType::Jmp => {
                 if let Some(OpcodeArgument::Immediate(target)) = opcode.arg1 {
                     self.pc = target;
-                    println!("Jumping to address: {}", self.pc);
                 }
             }
 
@@ -652,7 +710,6 @@ impl Register {
             Register::V15 => 24,
             //Keycodes
             Register::K0 => 16,
-            Register::Invalid => 255,
         }
     }
 }

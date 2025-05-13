@@ -6,19 +6,17 @@ mod render;
 mod screen;
 mod types;
 
-use cpu::Register;
-use screen::DrawCommand;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use types::{Color, Point};
 use winit::event_loop::{ControlFlow, EventLoop};
+use crate::cpu::Register;
 
 fn main() {
     let vcpu = Arc::new(Mutex::new(cpu::MicroCVMCpu::empty()));
 
     {
         let mut vcpu_locked = vcpu.lock().unwrap();
-        if let Err(e) = vcpu_locked.read_memory_from_file("examples/glyphs.bin") {
+        if let Err(e) = vcpu_locked.read_memory_from_file("examples/string.bin") {
             eprintln!("error reading binary: {}", e);
         }
     }
@@ -57,4 +55,5 @@ fn main() {
 
     let mut app = render::App::new(framebuffer_width as u32, framebuffer_height as u32, vcpu);
     let _ = event_loop.run_app(&mut app);
+
 }
