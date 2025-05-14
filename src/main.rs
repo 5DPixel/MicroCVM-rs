@@ -5,11 +5,11 @@ mod disk;
 mod render;
 mod screen;
 mod types;
+mod keycodes;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 use winit::event_loop::{ControlFlow, EventLoop};
-use crate::cpu::Register;
 
 fn main() {
     let vcpu = Arc::new(Mutex::new(cpu::MicroCVMCpu::empty()));

@@ -215,37 +215,38 @@ impl DrawCommand {
         let font_data = std::fs::read("resources/terminal.ttf").unwrap();
         let font = Font::try_from_vec(font_data).unwrap();
 
-        let scale = Scale::uniform(50.0);
+        let scale = Scale::uniform(20.0);
         let glyph = font
             .glyph(character)
             .scaled(scale)
             .positioned(rusttype::point(0.0, 0.0));
 
-        let bounds = glyph.pixel_bounding_box().unwrap();
+        if let Some(bounds) = glyph.pixel_bounding_box() {
+            glyph.draw(|x, y, v| {
+                let screen_x = character_position.x + x as isize + bounds.min.x as isize;
+                let screen_y = character_position.y + y as isize + bounds.min.y as isize;
 
-        glyph.draw(|x, y, v| {
-            let screen_x = character_position.x + x as isize + bounds.min.x as isize;
-            let screen_y = character_position.y + y as isize + bounds.min.y as isize;
+                let screen_width = cpu.framebuffer_width / 2;
+                let screen_height = cpu.framebuffer_height / 2;
 
-            let screen_width = cpu.framebuffer_width / 2;
-            let screen_height = cpu.framebuffer_height / 2;
+                if screen_x >= 0
+                    && screen_y >= 0
+                    && screen_x < screen_width as isize
+                    && screen_y < screen_height as isize
+                {
+                    let index = DrawCommand::get_index_from_coordinate(
+                        super::types::Point::new(screen_x, screen_y),
+                        screen_width as isize,
+                    );
 
-            if screen_x >= 0
-                && screen_y >= 0
-                && screen_x < screen_width as isize
-                && screen_y < screen_height as isize
-            {
-                let index = DrawCommand::get_index_from_coordinate(
-                    super::types::Point::new(screen_x, screen_y),
-                    screen_width as isize,
-                );
-
-                cpu.video_memory[index as usize] = super::types::Color::new(
-                    (color.r as f32 * v) as u8,
-                    (color.g as f32 * v) as u8,
-                    (color.b as f32 * v) as u8,
-                );
-            }
-        });
+                    cpu.video_memory[index as usize] = super::types::Color::new(
+                        (color.r as f32 * v) as u8,
+                        (color.g as f32 * v) as u8,
+                        (color.b as f32 * v) as u8,
+                    );
+                }
+            });
+        }
     }
+
 }

@@ -23,7 +23,8 @@ const HEAP_SIZE: usize = MEM_TOTAL - HEAP_OFFSET;
 
 const VIDEO_MEMORY: usize = 1728 * 1024; //1.6875MiB
 const REGISTER_COUNT: usize = 25;
-pub const FLAG_ZERO: u16 = 0x0001;
+
+const FLAG_ZERO: u16 = 0x0001;
 
 #[derive(Default, Clone)]
 pub struct MicroCVMCpu {
@@ -31,6 +32,7 @@ pub struct MicroCVMCpu {
     pub video_memory: Vec<super::types::Color>,
     pub registers: [u16; REGISTER_COUNT],
     pub pc: u16,
+    pub sp: u16,
     pub flags: u16,
     pub framebuffer_width: usize,
     pub framebuffer_height: usize,
@@ -60,6 +62,12 @@ pub enum OpcodeType {
     Not = 0x11,
     Shl = 0x12,
     Shr = 0x13,
+    //Stack opcodes
+    Push = 0x14,
+    Pop = 0x15,
+    Ret = 0x16,
+
+    Load8 = 0x17,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +189,7 @@ impl MicroCVMCpu {
             video_memory: vec![super::types::Color::new(0, 0, 0); VIDEO_MEMORY],
             registers: [0; REGISTER_COUNT],
             pc: 0,
+            sp: STACK_OFFSET as u16,
             flags: 0,
             framebuffer_width: 768,
             framebuffer_height: 576,
@@ -206,6 +215,9 @@ impl MicroCVMCpu {
             OpcodeType::Not => 1,
             OpcodeType::Shl => 2,
             OpcodeType::Shr => 2,
+            OpcodeType::Push => 1,
+            OpcodeType::Pop => 1,
+            OpcodeType::Load8 => 2,
             _ => 0,
         }
     }
@@ -292,10 +304,21 @@ impl MicroCVMCpu {
 
 
             OpcodeType::Sub => {
-                if let (Some(OpcodeArgument::Register(dst)), Some(OpcodeArgument::Immediate(imm))) =
-                    (opcode.arg1, opcode.arg2)
-                {
-                    self.registers[Register::index(dst) as usize] -= imm;
+                if let Some(OpcodeArgument::Register(dst)) = opcode.arg1 {
+                    let dst_index = Register::index(dst) as usize;
+
+                    match opcode.arg2 {
+                        Some(OpcodeArgument::Immediate(imm)) => {
+                            self.registers[dst_index] -= imm;
+                        }
+                        Some(OpcodeArgument::Register(src)) => {
+                            let src_index = Register::index(src) as usize;
+                            self.registers[dst_index] -= self.registers[src_index];
+                        }
+                        _ => {
+
+                        }
+                    }
                 }
             }
 
@@ -473,6 +496,57 @@ impl MicroCVMCpu {
                 }
             }
 
+            OpcodeType::Push => {
+                if let Some(OpcodeArgument::Register(target)) = opcode.arg1 {
+                    self.sp -= 1;
+
+                    self.memory[self.sp as usize] = target as u16;
+                }
+            }
+
+            OpcodeType::Pop => {
+                if let Some(OpcodeArgument::Register(target)) = opcode.arg1 {
+                    let value = self.memory[self.sp as usize];
+
+                    self.sp += 1;
+
+                    self.registers[Register::index(target) as usize] = value;
+                }
+            }
+
+            OpcodeType::Load8 => {
+                if let Some(OpcodeArgument::Register(dst)) = opcode.arg1 {
+                    let dst_index = Register::index(dst) as usize;
+
+                    match opcode.arg2 {
+                        Some(OpcodeArgument::Immediate(imm)) => {
+                            let word = self.memory[imm as usize / 2]; // Get the 16-bit word
+                            let byte = if imm % 2 == 0 {
+                                word & 0x00FF      // Low byte
+                            } else {
+                                (word >> 8) & 0x00FF  // High byte
+                            };
+                            self.registers[dst_index] = byte;
+                        }
+                        Some(OpcodeArgument::Register(src)) => {
+                            let src_index = Register::index(src) as usize;
+                            let addr = self.registers[src_index] as usize;
+                            let word = self.memory[addr / 2];
+                            let byte = if addr % 2 == 0 {
+                                word & 0x00FF
+                            } else {
+                                (word >> 8) & 0x00FF
+                            };
+                            self.registers[dst_index] = byte;
+                        }
+                        _ => {
+
+                        }
+                    }
+                }
+            }
+
+
             _ => {}
         }
 
@@ -540,6 +614,16 @@ impl TryFrom<u16> for OpcodeType {
             0x0B => Ok(OpcodeType::Je),
             0x0C => Ok(OpcodeType::Jne),
             0x0D => Ok(OpcodeType::Cmp),
+            0x0E => Ok(OpcodeType::And),
+            0x0F => Ok(OpcodeType::Or),
+            0x10 => Ok(OpcodeType::Xor),
+            0x11 => Ok(OpcodeType::Not),
+            0x12 => Ok(OpcodeType::Shl),
+            0x13 => Ok(OpcodeType::Shr),
+            0x14 => Ok(OpcodeType::Push),
+            0x15 => Ok(OpcodeType::Pop),
+            0x16 => Ok(OpcodeType::Ret),
+            0x17 => Ok(OpcodeType::Load8),
             invalid => return Err(InvalidOpcode(invalid)),
         }
     }
@@ -565,6 +649,16 @@ impl TryFrom<&str> for OpcodeType {
             "je" => Ok(OpcodeType::Je),
             "jne" => Ok(OpcodeType::Jne),
             "cmp" => Ok(OpcodeType::Cmp),
+            "and" => Ok(OpcodeType::And),
+            "or" => Ok(OpcodeType::Or),
+            "xor" => Ok(OpcodeType::Xor),
+            "not" => Ok(OpcodeType::Not),
+            "shl" => Ok(OpcodeType::Shl),
+            "shr" => Ok(OpcodeType::Shr),
+            "push" => Ok(OpcodeType::Push),
+            "pop" => Ok(OpcodeType::Pop),
+            "ret" => Ok(OpcodeType::Ret),
+            "load8" => Ok(OpcodeType::Load8),
             invalid => return Err(InvalidOpcodeString(invalid.to_string())),
         }
     }

@@ -4,10 +4,10 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::cpu;
+use crate::keycodes::physical_key_to_keycode;
 
 #[derive(Default)]
 pub struct App {
@@ -18,20 +18,6 @@ pub struct App {
     cpu: Arc<Mutex<cpu::MicroCVMCpu>>,
 }
 
-fn physical_key_to_keycode(key: &PhysicalKey) -> u16 {
-    match key {
-        PhysicalKey::Code(code) => match code {
-            winit::keyboard::KeyCode::KeyA => 0x41,
-            winit::keyboard::KeyCode::KeyB => 0x42,
-            winit::keyboard::KeyCode::Enter => 0x0D,
-            winit::keyboard::KeyCode::ArrowUp => 0x80,
-            winit::keyboard::KeyCode::ArrowDown => 0x81,
-            winit::keyboard::KeyCode::Space => 0x20,
-            _ => 0x00,
-        },
-        _ => 0x00,
-    }
-}
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -70,7 +56,7 @@ impl ApplicationHandler for App {
                     cpu.registers[cpu::Register::index(cpu::Register::K0) as usize] =
                         physical_key_to_keycode(&physical_key);
                 } else {
-                    cpu.registers[cpu::Register::index(cpu::Register::K0) as usize] = 0x5F;
+                    cpu.registers[cpu::Register::index(cpu::Register::K0) as usize] = 0;
                 }
             }
             _ => (),
