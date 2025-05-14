@@ -1,5 +1,8 @@
+use cdfs::{DirectoryEntry, ISO9660};
 use std::fmt::Display;
 use std::io;
+use std::fs::File;
+use std::io::Read;
 
 use crate::screen::DrawCommand;
 use crate::types::{Color, Point};
@@ -520,11 +523,11 @@ impl MicroCVMCpu {
 
                     match opcode.arg2 {
                         Some(OpcodeArgument::Immediate(imm)) => {
-                            let word = self.memory[imm as usize / 2]; // Get the 16-bit word
+                            let word = self.memory[imm as usize / 2];
                             let byte = if imm % 2 == 0 {
-                                word & 0x00FF      // Low byte
+                                word & 0x00FF
                             } else {
-                                (word >> 8) & 0x00FF  // High byte
+                                (word >> 8) & 0x00FF
                             };
                             self.registers[dst_index] = byte;
                         }
@@ -568,6 +571,22 @@ impl MicroCVMCpu {
         Ok(buffer.len())
     }
 
+    pub fn read_iso(&mut self, iso_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let file = File::open(iso_path)?;
+        let iso = ISO9660::new(file)?;
+
+        let mut contents = Vec::new();
+        if let Some(DirectoryEntry::File(file)) = iso.open("boot.bin")? {
+            file.read().read_to_end(&mut contents)?;
+
+            let tmp_file_path = "boot.bin";
+            std::fs::write(tmp_file_path, &contents)?;
+
+            self.read_memory_from_file(tmp_file_path)?;
+        }
+
+        Ok(())
+    }
 
 
     pub fn set_flag(&mut self, flag: u16, value: bool) {
